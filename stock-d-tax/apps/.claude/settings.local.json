@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:docs.anthropic.com)",
+      "Bash(copy config.env .env)",
+      "Bash(cp:*)",
+      "Bash(npm run dev:*)"
+    ],
+    "deny": []
+  }
+}
