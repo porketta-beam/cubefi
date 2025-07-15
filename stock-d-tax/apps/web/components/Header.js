@@ -189,6 +189,14 @@ export default function Header() {
     sendMessage(question);
   };
 
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+
+  const handleLogin = () => {
+    setIsLoggedIn(true);
+    setShowLoginModal(false);
+  };
+
   return (
     <>
       <header className="header">
@@ -198,6 +206,7 @@ export default function Header() {
               Stock D-TAX
             </Link>
             <nav className="header-nav">
+            <Link href="/dashboard" className={`nav-link ${isActive('/dashboard') ? 'active' : ''}`}>대시보드</Link>
               <Link href="/chart" className={`nav-link ${isActive('/chart') ? 'active' : ''}`}>차트</Link>
               <Link href="/assets" className={`nav-link ${isActive('/assets') ? 'active' : ''}`}>자산</Link>
             </nav>
@@ -213,10 +222,22 @@ export default function Header() {
           </div>
           <div className="header-right">
             <div className="profile">
-              <div className="profile-avatar" style={{background:'#2ee86c'}}>🐦</div>
-              <div>
-                <div className="profile-name">이주현</div>
+              
+              <div className="homepage-auth">
+            {!isLoggedIn ? (
+              <button 
+                className="login-btn"
+                onClick={() => setShowLoginModal(true)}
+              >
+                로그인
+              </button>
+            ) : (
+              <div className="user-profile">
+                <span className="user-avatar">👤</span>
+                <span className="user-name">이주현님</span>
               </div>
+            )}
+          </div>
             </div>
             <button className="header-icon" title="다운로드">&#8681;</button>
             <button className="header-icon" title="도움말">&#10068;</button>
@@ -224,6 +245,52 @@ export default function Header() {
           </div>
         </div>
       </header>
+
+      {/* 로그인 모달 */}
+      {showLoginModal && (
+        <div className="modal-overlay" onClick={() => setShowLoginModal(false)}>
+          <div className="login-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">로그인</h3>
+              <button 
+                className="modal-close"
+                onClick={() => setShowLoginModal(false)}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="login-form">
+                <div className="form-group">
+                  <label>이메일</label>
+                  <input type="email" placeholder="이메일을 입력하세요" />
+                </div>
+                <div className="form-group">
+                  <label>비밀번호</label>
+                  <input type="password" placeholder="비밀번호를 입력하세요" />
+                </div>
+                <button className="login-submit-btn" onClick={handleLogin}>
+                  로그인
+                </button>
+                <div className="login-divider">
+                  <span>또는</span>
+                </div>
+                <div className="social-login">
+                  <button className="social-btn kakao">
+                    <span>💬</span> 카카오 로그인
+                  </button>
+                  <button className="social-btn naver">
+                    <span>N</span> 네이버 로그인
+                  </button>
+                  <button className="social-btn google">
+                    <span>G</span> 구글 로그인
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 챗봇 드롭다운 */}
       {isChatbotOpen && (
