@@ -548,7 +548,8 @@ body {
   padding: 40px 20px;
 }
 
-.dashboard-container h1 {
+.dashboard-container h1,
+.assets-container h1 {
   text-align: center;
   margin-bottom: 40px;
   font-size: 2.5rem;
@@ -1007,64 +1008,169 @@ body {
 }
 .domino-assets-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-  gap: 18px;
-  margin-bottom: 24px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 28px;
+  margin-bottom: 32px;
 }
 .domino-assets-card {
   background: #23262f;
-  border-radius: 12px;
-  padding: 20px 16px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+  border-radius: 18px;
+  padding: 28px 20px 20px 20px;
+  box-shadow: 0 4px 24px rgba(46,232,108,0.07);
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  min-height: 80px;
+  align-items: center;
+  min-height: 120px;
+  transition: box-shadow 0.2s, transform 0.2s;
+  position: relative;
+}
+.domino-assets-card.main {
+  background: linear-gradient(135deg, #2ee86c 0%, #36a2eb 100%);
+  color: #181a20;
+  box-shadow: 0 8px 32px rgba(46,232,108,0.18);
+  border: 2px solid #2ee86c;
+}
+.domino-assets-card .card-icon {
+  font-size: 2.2rem;
+  margin-bottom: 10px;
+  color: #2ee86c;
+  filter: drop-shadow(0 2px 6px rgba(46,232,108,0.12));
+}
+.domino-assets-card.main .card-icon {
+  color: #fff;
+  filter: drop-shadow(0 2px 8px rgba(54,162,235,0.18));
 }
 .domino-assets-card-title {
   color: #b0b8c1;
-  font-size: 1rem;
-  margin-bottom: 6px;
-  font-weight: 500;
+  font-size: 1.08rem;
+  margin-bottom: 8px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
 }
 .domino-assets-card-value {
-  font-size: 1.3rem;
-  font-weight: 700;
+  font-size: 1.18rem;
+  font-weight: 800;
   color: #2ee86c;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
+  letter-spacing: 0.01em;
+}
+.domino-assets-card.main .domino-assets-card-value {
+  font-size: 1.3rem;
+  color: #fff;
 }
 .domino-assets-card-desc {
   color: #888;
-  font-size: 0.97rem;
+  font-size: 1.01rem;
+  margin-top: 2px;
 }
+.domino-assets-card-desc.positive {
+  color: #2ee86c;
+  font-weight: 600;
+}
+.domino-assets-card-desc.negative {
+  color: #ff6384;
+  font-weight: 600;
+}
+.domino-assets-card:hover {
+  box-shadow: 0 8px 32px rgba(46,232,108,0.18);
+  transform: translateY(-3px) scale(1.03);
+  z-index: 2;
+}
+
 .domino-assets-summary {
   background: #23262f;
-  border-radius: 12px;
-  padding: 18px 16px;
+  border-radius: 16px;
+  padding: 22px 18px;
   margin-bottom: 0;
+  box-shadow: 0 2px 12px rgba(46,232,108,0.06);
 }
 .domino-assets-summary h3 {
   color: #fff;
-  font-size: 1.08rem;
-  margin-bottom: 12px;
+  font-size: 1.13rem;
+  margin-bottom: 16px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
 }
 .domino-assets-summary-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(46,232,108,0.04);
 }
 .domino-assets-summary-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  font-size: 1.01rem;
+  gap: 14px;
+  font-size: 1.07rem;
   color: #fff;
-  padding: 6px 0;
+  padding: 12px 0;
   border-bottom: 1px solid #23262f;
+  transition: background 0.15s;
+  position: relative;
 }
 .domino-assets-summary-item:last-child {
   border-bottom: none;
 }
+.domino-assets-summary-item:hover {
+  background: #23262f;
+  box-shadow: 0 2px 8px rgba(46,232,108,0.08);
+}
+.domino-assets-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 2px;
+  border: 2px solid #23262f;
+}
+.domino-assets-summary-name {
+  min-width: 90px;
+  font-weight: 700;
+  color: #2ee86c;
+}
+.domino-assets-summary-amount {
+  min-width: 110px;
+  text-align: right;
+  font-weight: 600;
+  color: #fff;
+}
+.domino-assets-summary-per {
+  min-width: 54px;
+  color: #b0b8c1;
+  font-size: 1.01rem;
+}
+.domino-assets-summary-change.positive {
+  color: #2ee86c;
+  font-weight: 700;
+}
+.domino-assets-summary-change.negative {
+  color: #ff6384;
+  font-weight: 700;
+}
+.domino-assets-summary-change.positive::before {
+  content: '▲ ';
+  color: #2ee86c;
+}
+.domino-assets-summary-change.negative::before {
+  content: '▼ ';
+  color: #ff6384;
+}
+
+@media (max-width: 900px) {
+  .domino-assets-cards {
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+}
+@media (max-width: 600px) {
+  .domino-assets-cards {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .domino-assets-summary {
+    padding: 12px 6px;
+  }
+}
+
 .domino-assets-dot {
   width: 12px;
   height: 12px;
@@ -1093,23 +1199,109 @@ body {
   flex: 1;
   min-width: 220px;
   background: #23262f;
-  border-radius: 12px;
-  padding: 18px 10px 10px 10px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+  border-radius: 16px;
+  padding: 28px 18px 18px 18px;
+  box-shadow: 0 4px 16px rgba(46,232,108,0.08);
   display: flex;
   flex-direction: column;
   align-items: center;
-  max-width: 320px;
+  max-width: 340px;
+  position: relative;
 }
+
 .domino-assets-chart h3 {
-  color: #fff;
-  font-size: 1.08rem;
-  margin-bottom: 10px;
+  color: #2ee86c;
+  font-size: 1.18rem;
+  font-weight: 700;
+  margin-bottom: 18px;
+  letter-spacing: 0.01em;
 }
+
 .domino-assets-chart-inner {
-  width: 200px;
-  height: 200px;
-  margin: 0 auto;
+  width: 210px;
+  height: 210px;
+  margin: 0 auto 10px auto;
+  position: relative;
+}
+
+.assets-doughnut-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+}
+
+.assets-doughnut-label {
+  color: #b0b8c1;
+  font-size: 1.08rem;
+  margin-bottom: 2px;
+}
+
+.assets-doughnut-value {
+  color: #fff;
+  font-size: 1.05rem !important;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.assets-chart-desc {
+  color: #b0b8c1;
+  font-size: 1.01rem;
+  margin: 12px 0 8px 0;
+  text-align: center;
+}
+
+.assets-custom-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 18px;
+  background: #20232a;
+  border-radius: 12px;
+  padding: 16px 12px;
+  box-shadow: 0 2px 8px rgba(46,232,108,0.08);
+  width: 100%;
+}
+
+.assets-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 1.01rem;
+  color: #fff;
+  padding: 4px 0;
+}
+
+.assets-legend-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 2px;
+  border: 2px solid #23262f;
+}
+
+.assets-legend-name {
+  min-width: 80px;
+  font-weight: 700;
+  color: #2ee86c;
+}
+
+.assets-legend-per {
+  min-width: 48px;
+  color: #b0b8c1;
+  font-size: 0.99rem;
+}
+
+.assets-legend-amount {
+  min-width: 90px;
+  text-align: right;
+  color: #fff;
+  font-weight: 600;
 }
 
 @media (max-width: 1000px) {
@@ -1403,7 +1595,7 @@ body {
   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.07);
   padding: 18px 10px 10px 10px;
-  margin-bottom: 0;
+  margin-bottom: 32px;
 }
 .domino-tab-table-header {
   display: flex;
@@ -1510,12 +1702,16 @@ body {
 
 .assets-tabs {
   display: flex;
+  justify-content: center;
   gap: 14px;
   margin-bottom: 32px;
   background: #23262f;
   border-radius: 14px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.07);
-  padding: 10px 12px;
+  padding: 10px 80px;
+  max-width: 1400px;
+  margin-left: auto;
+  margin-right: auto;
   overflow-x: auto;
   scrollbar-width: thin;
   scrollbar-color: #2ee86c #23262f;
@@ -2701,3 +2897,64 @@ body {
     min-width: auto;
   }
 } 
+
+.assets-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 40px 20px;
+}
+
+@media (min-width: 1000px) {
+  .domino-assets-layout {
+    align-items: stretch;
+  }
+  .domino-assets-main,
+  .domino-assets-chart {
+    min-height: 100%;
+    height: auto;
+  }
+  .domino-assets-main {
+    display: flex;
+    flex-direction: column;
+  }
+  .domino-assets-chart {
+    align-self: stretch;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+  }
+}
+
+@media (min-width: 1200px) {
+  .domino-assets-cards {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 18px;
+  }
+  .domino-assets-card {
+    min-width: 0;
+    padding: 18px 10px 14px 10px;
+    min-height: 80px;
+  }
+}
+
+@media (min-width: 900px) {
+  .domino-tab-summary-cards {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(170px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .domino-tab-card {
+    background: #23262f;
+    border-radius: 12px;
+    padding: 18px 14px;
+    text-align: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+    min-width: 0;
+    min-height: 70px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+}

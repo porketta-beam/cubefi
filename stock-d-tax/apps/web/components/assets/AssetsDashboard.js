@@ -83,7 +83,7 @@ export default function AssetsDashboard() {
           <div className="domino-assets-card">
             <div className="domino-assets-card-title">총 자산</div>
             <div className="domino-assets-card-value">{totalAssets.toLocaleString()}원</div>
-            <div className="domino-assets-card-desc">이번 달 +4.1%</div>
+            <div className="domino-assets-card-desc">+ 4.1%</div>
           </div>
           <div className="domino-assets-card">
             <div className="domino-assets-card-title">국내주식</div>
@@ -118,7 +118,7 @@ export default function AssetsDashboard() {
       </div>
       <div className="domino-assets-chart">
         <h3>자산 분포</h3>
-        <div className="domino-assets-chart-inner">
+        <div className="domino-assets-chart-inner" style={{position:'relative'}}>
           <Doughnut 
             data={assetData}
             options={{
@@ -131,6 +131,23 @@ export default function AssetsDashboard() {
               }
             }}
           />
+          {/* 도넛 중앙에 총 자산 강조 */}
+          <div className="assets-doughnut-center">
+            <div className="assets-doughnut-label">총 자산</div>
+            <div className="assets-doughnut-value">
+              {totalAssets.toLocaleString()}<span style={{whiteSpace: 'nowrap'}}>&nbsp;원</span>
+            </div>
+          </div>
+        </div>
+        {/* 커스텀 범례 */}
+        <div className="assets-custom-legend">
+          {assetSummary.map((asset, idx) => (
+            <div className="assets-legend-item" key={asset.category}>
+              <span className="assets-legend-dot" style={{background: asset.color}}></span>
+              <span className="assets-legend-name">{asset.category}</span>
+              <span className="assets-legend-per">{asset.percentage}%</span>
+            </div>
+          ))}
         </div>
       </div>
     </div>
