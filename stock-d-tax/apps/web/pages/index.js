@@ -236,8 +236,8 @@ export default function Home() {
                 </div>
                 <button className="alert-cta">절세 전략 보기</button>
               </div>
-            </div>
-          </div>
+        </div>
+      </div>
         </div>
       </section>
 
@@ -326,7 +326,7 @@ export default function Home() {
                 <div className="tax-label">예상 세금</div>
                 <div className="tax-amount">134,750원</div>
               </div>
-            </div>
+      </div>
 
             <div className="comparison-card">
               <div className="account-header">
@@ -446,9 +446,9 @@ export default function Home() {
                 </div>
               </div>
             </div>
-          </div>
-        </div>
+      </div>
+    </div>
       )}
     </>
   );
-} 
+}
