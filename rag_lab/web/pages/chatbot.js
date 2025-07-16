@@ -35,12 +35,17 @@ export default function ChatbotPage() {
     setIsLoading(true);
 
     try {
+<<<<<<< HEAD:ai/web/pages/chatbot.js
       const response = await axios.post('http://localhost:8001/api/chatbot/message', {
         message: msg
       }, {
         headers: {
           'Content-Type': 'application/json'
         }
+=======
+      const response = await axios.post('http://localhost:4000/api/chatbot/message', {
+        message: msg
+>>>>>>> origin/cbo:rag_lab/web/pages/chatbot.js
       });
 
       setMessages((prev) => [
@@ -65,6 +70,7 @@ export default function ChatbotPage() {
     }
   };
 
+<<<<<<< HEAD:ai/web/pages/chatbot.js
   // 줄바꿈을 <br> 태그로 변환하는 함수
   const formatMessage = (text) => {
     return text.split('\n').map((line, index) => (
@@ -75,6 +81,8 @@ export default function ChatbotPage() {
     ));
   };
 
+=======
+>>>>>>> origin/cbo:rag_lab/web/pages/chatbot.js
   return (
     <div className="dashboard-container">
       <h1>스탁디택스 챗봇</h1>
@@ -82,7 +90,11 @@ export default function ChatbotPage() {
         <div className="chatbot-container">
           <div className="chat-messages">
             {messages.map((m, i) => (
+<<<<<<< HEAD:ai/web/pages/chatbot.js
               <div key={i} className={`chat-message ${m.type}`}>{formatMessage(m.content)}</div>
+=======
+              <div key={i} className={`chat-message ${m.type}`}>{m.content}</div>
+>>>>>>> origin/cbo:rag_lab/web/pages/chatbot.js
             ))}
             {isLoading && (
               <div className="chat-message bot loading">

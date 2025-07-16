@@ -83,7 +83,11 @@ export default function AssetsDashboard() {
           <div className="domino-assets-card">
             <div className="domino-assets-card-title">총 자산</div>
             <div className="domino-assets-card-value">{totalAssets.toLocaleString()}원</div>
+<<<<<<< HEAD:ai/web/components/assets/AssetsDashboard.js
             <div className="domino-assets-card-desc">+ 4.1%</div>
+=======
+            <div className="domino-assets-card-desc">이번 달 +4.1%</div>
+>>>>>>> origin/cbo:rag_lab/web/components/assets/AssetsDashboard.js
           </div>
           <div className="domino-assets-card">
             <div className="domino-assets-card-title">국내주식</div>
@@ -118,7 +122,11 @@ export default function AssetsDashboard() {
       </div>
       <div className="domino-assets-chart">
         <h3>자산 분포</h3>
+<<<<<<< HEAD:ai/web/components/assets/AssetsDashboard.js
         <div className="domino-assets-chart-inner" style={{position:'relative'}}>
+=======
+        <div className="domino-assets-chart-inner">
+>>>>>>> origin/cbo:rag_lab/web/components/assets/AssetsDashboard.js
           <Doughnut 
             data={assetData}
             options={{
@@ -131,6 +139,7 @@ export default function AssetsDashboard() {
               }
             }}
           />
+<<<<<<< HEAD:ai/web/components/assets/AssetsDashboard.js
           {/* 도넛 중앙에 총 자산 강조 */}
           <div className="assets-doughnut-center">
             <div className="assets-doughnut-label">총 자산</div>
@@ -148,6 +157,8 @@ export default function AssetsDashboard() {
               <span className="assets-legend-per">{asset.percentage}%</span>
             </div>
           ))}
+=======
+>>>>>>> origin/cbo:rag_lab/web/components/assets/AssetsDashboard.js
         </div>
       </div>
     </div>

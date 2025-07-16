@@ -11,7 +11,11 @@ export default function Assets() {
   const [activeTab, setActiveTab] = useState('dashboard');
 
   const tabs = [
+<<<<<<< HEAD:ai/web/pages/assets/index.js
     { id: 'dashboard', name: '내 자산 요약' },
+=======
+    { id: 'dashboard', name: '대시보드' },
+>>>>>>> origin/cbo:rag_lab/web/pages/assets/index.js
     { id: 'domestic', name: '국내주식' },
     { id: 'foreign', name: '해외주식' },
     { id: 'dividend', name: '배당주' },
@@ -55,11 +59,18 @@ export default function Assets() {
   };
 
   return (
+<<<<<<< HEAD:ai/web/pages/assets/index.js
     <div className="dashboard-container">
       <div className="assets-header">
         <h1>내 자산</h1>
         <p>보유하고 있는 모든 금융상품을 한눈에 확인하세요</p>
         <br></br>
+=======
+    <div className="assets-container">
+      <div className="assets-header">
+        <h1>내 자산</h1>
+        <p>보유하고 있는 모든 금융상품을 한눈에 확인하세요</p>
+>>>>>>> origin/cbo:rag_lab/web/pages/assets/index.js
       </div>
       <div className="user-summary-cards">
         <div className="user-card">

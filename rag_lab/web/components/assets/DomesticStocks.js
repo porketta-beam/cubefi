@@ -1,7 +1,12 @@
+<<<<<<< HEAD:ai/web/components/assets/DomesticStocks.js
 import { useState } from 'react';
 
 export default function DomesticStocks() {
   const [stocks, setStocks] = useState([
+=======
+export default function DomesticStocks() {
+  const stocks = [
+>>>>>>> origin/cbo:rag_lab/web/components/assets/DomesticStocks.js
     {
       name: '삼성전자',
       ticker: '005930',
@@ -42,6 +47,7 @@ export default function DomesticStocks() {
       profit: 240000,
       profitRate: 6.7
     }
+<<<<<<< HEAD:ai/web/components/assets/DomesticStocks.js
   ]);
   const [showAddForm, setShowAddForm] = useState(false);
   const [newStock, setNewStock] = useState({
@@ -51,11 +57,15 @@ export default function DomesticStocks() {
     avgPrice: '',
     currentPrice: '',
   });
+=======
+  ];
+>>>>>>> origin/cbo:rag_lab/web/components/assets/DomesticStocks.js
 
   const totalValue = stocks.reduce((sum, stock) => sum + stock.totalValue, 0);
   const totalProfit = stocks.reduce((sum, stock) => sum + stock.profit, 0);
   const totalProfitRate = ((totalProfit / (totalValue - totalProfit)) * 100).toFixed(2);
 
+<<<<<<< HEAD:ai/web/components/assets/DomesticStocks.js
   const handleAddStock = () => {
     if (!newStock.name || !newStock.ticker || !newStock.quantity || !newStock.avgPrice || !newStock.currentPrice) return;
     const quantity = Number(newStock.quantity);
@@ -81,6 +91,8 @@ export default function DomesticStocks() {
     setNewStock({ name: '', ticker: '', quantity: '', avgPrice: '', currentPrice: '' });
   };
 
+=======
+>>>>>>> origin/cbo:rag_lab/web/components/assets/DomesticStocks.js
   return (
     <div className="domino-tab-section">
       <div className="domino-tab-summary-cards">
@@ -98,6 +110,7 @@ export default function DomesticStocks() {
         </div>
       </div>
       <div className="domino-tab-table-section">
+<<<<<<< HEAD:ai/web/components/assets/DomesticStocks.js
         <div className="stocks-table">
           <h3>보유 종목</h3>
           <div className="domino-tab-table-wrap">
@@ -156,6 +169,55 @@ export default function DomesticStocks() {
           <button className="action-btn" style={{minWidth:'60px'}} onClick={() => setShowAddForm(false)}>취소</button>
         </div>
       )}
+=======
+        <div className="domino-tab-table-header">
+          <h3>보유 종목</h3>
+          <div className="domino-tab-actions">
+            <button className="action-btn primary">종목 추가</button>
+            <button className="action-btn">매수/매도</button>
+            <button className="action-btn">세금 계산</button>
+            <button className="action-btn">차트 보기</button>
+          </div>
+        </div>
+        <div className="domino-tab-table-wrap">
+          <table className="domino-tab-table">
+            <thead>
+              <tr>
+                <th>종목명</th>
+                <th>보유수량</th>
+                <th>평균단가</th>
+                <th>현재가</th>
+                <th>평가금액</th>
+                <th>평가손익</th>
+                <th>수익률</th>
+              </tr>
+            </thead>
+            <tbody>
+              {stocks.map((stock, index) => (
+                <tr key={index}>
+                  <td>
+                    <div className="stock-info">
+                      <div className="stock-name">{stock.name}</div>
+                      <div className="stock-ticker">{stock.ticker}</div>
+                    </div>
+                  </td>
+                  <td>{stock.quantity.toLocaleString()}주</td>
+                  <td>{stock.avgPrice.toLocaleString()}원</td>
+                  <td>{stock.currentPrice.toLocaleString()}원</td>
+                  <td>{stock.totalValue.toLocaleString()}원</td>
+                  <td className={stock.profit >= 0 ? 'positive' : 'negative'}>
+                    {stock.profit >= 0 ? '+' : ''}{stock.profit.toLocaleString()}원
+                  </td>
+                  <td className={stock.profitRate >= 0 ? 'positive' : 'negative'}>
+                    {stock.profitRate >= 0 ? '+' : ''}{stock.profitRate}%
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+>>>>>>> origin/cbo:rag_lab/web/components/assets/DomesticStocks.js
     </div>
   );
 } 

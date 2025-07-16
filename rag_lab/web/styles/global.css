@@ -229,6 +229,10 @@ body {
   word-wrap: break-word;
   font-size: 0.9rem;
   line-height: 1.4;
+<<<<<<< HEAD:ai/web/styles/global.css
+=======
+  white-space: pre-wrap; /* 띄어쓰기와 줄바꿈 보존 */
+>>>>>>> origin/cbo:rag_lab/web/styles/global.css
 }
 
 .chatbot-message.bot {
@@ -548,8 +552,12 @@ body {
   padding: 40px 20px;
 }
 
+<<<<<<< HEAD:ai/web/styles/global.css
 .dashboard-container h1,
 .assets-container h1 {
+=======
+.dashboard-container h1 {
+>>>>>>> origin/cbo:rag_lab/web/styles/global.css
   text-align: center;
   margin-bottom: 40px;
   font-size: 2.5rem;
@@ -1008,6 +1016,7 @@ body {
 }
 .domino-assets-cards {
   display: grid;
+<<<<<<< HEAD:ai/web/styles/global.css
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 28px;
   margin-bottom: 32px;
@@ -1095,10 +1104,58 @@ body {
   border-radius: 12px;
   overflow: hidden;
   box-shadow: 0 2px 8px rgba(46,232,108,0.04);
+=======
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 18px;
+  margin-bottom: 24px;
+}
+.domino-assets-card {
+  background: #23262f;
+  border-radius: 12px;
+  padding: 20px 16px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-height: 80px;
+}
+.domino-assets-card-title {
+  color: #b0b8c1;
+  font-size: 1rem;
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+.domino-assets-card-value {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #2ee86c;
+  margin-bottom: 4px;
+}
+.domino-assets-card-desc {
+  color: #888;
+  font-size: 0.97rem;
+}
+.domino-assets-summary {
+  background: #23262f;
+  border-radius: 12px;
+  padding: 18px 16px;
+  margin-bottom: 0;
+}
+.domino-assets-summary h3 {
+  color: #fff;
+  font-size: 1.08rem;
+  margin-bottom: 12px;
+}
+.domino-assets-summary-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+>>>>>>> origin/cbo:rag_lab/web/styles/global.css
 }
 .domino-assets-summary-item {
   display: flex;
   align-items: center;
+<<<<<<< HEAD:ai/web/styles/global.css
   gap: 14px;
   font-size: 1.07rem;
   color: #fff;
@@ -1106,10 +1163,18 @@ body {
   border-bottom: 1px solid #23262f;
   transition: background 0.15s;
   position: relative;
+=======
+  gap: 12px;
+  font-size: 1.01rem;
+  color: #fff;
+  padding: 6px 0;
+  border-bottom: 1px solid #23262f;
+>>>>>>> origin/cbo:rag_lab/web/styles/global.css
 }
 .domino-assets-summary-item:last-child {
   border-bottom: none;
 }
+<<<<<<< HEAD:ai/web/styles/global.css
 .domino-assets-summary-item:hover {
   background: #23262f;
   box-shadow: 0 2px 8px rgba(46,232,108,0.08);
@@ -1171,6 +1236,8 @@ body {
   }
 }
 
+=======
+>>>>>>> origin/cbo:rag_lab/web/styles/global.css
 .domino-assets-dot {
   width: 12px;
   height: 12px;
@@ -1199,6 +1266,7 @@ body {
   flex: 1;
   min-width: 220px;
   background: #23262f;
+<<<<<<< HEAD:ai/web/styles/global.css
   border-radius: 16px;
   padding: 28px 18px 18px 18px;
   box-shadow: 0 4px 16px rgba(46,232,108,0.08);
@@ -1302,6 +1370,25 @@ body {
   text-align: right;
   color: #fff;
   font-weight: 600;
+=======
+  border-radius: 12px;
+  padding: 18px 10px 10px 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 320px;
+}
+.domino-assets-chart h3 {
+  color: #fff;
+  font-size: 1.08rem;
+  margin-bottom: 10px;
+}
+.domino-assets-chart-inner {
+  width: 200px;
+  height: 200px;
+  margin: 0 auto;
+>>>>>>> origin/cbo:rag_lab/web/styles/global.css
 }
 
 @media (max-width: 1000px) {
@@ -1595,7 +1682,11 @@ body {
   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.07);
   padding: 18px 10px 10px 10px;
+<<<<<<< HEAD:ai/web/styles/global.css
   margin-bottom: 32px;
+=======
+  margin-bottom: 0;
+>>>>>>> origin/cbo:rag_lab/web/styles/global.css
 }
 .domino-tab-table-header {
   display: flex;
@@ -1702,16 +1793,23 @@ body {
 
 .assets-tabs {
   display: flex;
+<<<<<<< HEAD:ai/web/styles/global.css
   justify-content: center;
+=======
+>>>>>>> origin/cbo:rag_lab/web/styles/global.css
   gap: 14px;
   margin-bottom: 32px;
   background: #23262f;
   border-radius: 14px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+<<<<<<< HEAD:ai/web/styles/global.css
   padding: 10px 80px;
   max-width: 1400px;
   margin-left: auto;
   margin-right: auto;
+=======
+  padding: 10px 12px;
+>>>>>>> origin/cbo:rag_lab/web/styles/global.css
   overflow-x: auto;
   scrollbar-width: thin;
   scrollbar-color: #2ee86c #23262f;
@@ -1761,6 +1859,7 @@ body {
     padding: 10px 16px;
     font-size: 0.98rem;
   }
+<<<<<<< HEAD:ai/web/styles/global.css
 } 
 
 /* ================================ */
@@ -2958,3 +3057,6 @@ body {
     align-items: center;
   }
 }
+=======
+} 
+>>>>>>> origin/cbo:rag_lab/web/styles/global.css

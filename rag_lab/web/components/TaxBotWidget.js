@@ -35,12 +35,17 @@ export default function TaxBotWidget() {
     setIsLoading(true);
 
     try {
+<<<<<<< HEAD:ai/web/components/TaxBotWidget.js
       const response = await axios.post('http://localhost:8001/api/chatbot/message', {
         message: inputMessage
       }, {
         headers: {
           'Content-Type': 'application/json'
         }
+=======
+      const response = await axios.post('http://localhost:4000/api/chatbot/message', {
+        message: inputMessage
+>>>>>>> origin/cbo:rag_lab/web/components/TaxBotWidget.js
       });
 
       const botMessage = {
@@ -70,6 +75,7 @@ export default function TaxBotWidget() {
     }
   };
 
+<<<<<<< HEAD:ai/web/components/TaxBotWidget.js
   // 줄바꿈을 <br> 태그로 변환하는 함수
   const formatMessage = (text) => {
     return text.split('\n').map((line, index) => (
@@ -80,6 +86,8 @@ export default function TaxBotWidget() {
     ));
   };
 
+=======
+>>>>>>> origin/cbo:rag_lab/web/components/TaxBotWidget.js
   return (
     <div className="taxbot-widget">
       <h3>스탁디택스봇</h3>
@@ -87,7 +95,11 @@ export default function TaxBotWidget() {
         <div className="chat-messages">
           {messages.map((message) => (
             <div key={message.id} className={`chat-message ${message.type}`}>
+<<<<<<< HEAD:ai/web/components/TaxBotWidget.js
               {formatMessage(message.content)}
+=======
+              {message.content}
+>>>>>>> origin/cbo:rag_lab/web/components/TaxBotWidget.js
             </div>
           ))}
           {isLoading && (
