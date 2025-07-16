@@ -39,7 +39,7 @@ router.post(async (req, res) => {
       formData.append('image', new Blob([imageFile.buffer], { type: imageFile.mimetype }), imageFile.originalname);
 
       // 백엔드 챗봇 API 호출 (이미지 포함)
-      const response = await fetch('http://localhost:4000/api/chatbot/message', {
+      const response = await fetch('http://localhost:8001/api/chatbot/message', {
         method: 'POST',
         body: formData,
       });
@@ -56,7 +56,7 @@ router.post(async (req, res) => {
       });
     } else {
       // 텍스트만 있는 경우 기존 방식
-      const response = await fetch('http://localhost:4000/api/chatbot/message', {
+      const response = await fetch('http://localhost:8001/api/chatbot/message', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

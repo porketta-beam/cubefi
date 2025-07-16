@@ -156,7 +156,7 @@ export default function Header() {
         formData.append('image', blob, 'image.jpg');
       }
 
-      const apiResponse = await fetch('/api/chatbot', {
+      const apiResponse = await fetch('http://localhost:8001/api/chatbot/message', {
         method: 'POST',
         body: formData,
       });
@@ -187,6 +187,16 @@ export default function Header() {
 
   const handleQuickQuestion = (question) => {
     sendMessage(question);
+  };
+
+  // 줄바꿈을 <br> 태그로 변환하는 함수
+  const formatMessage = (text) => {
+    return text.split('\n').map((line, index) => (
+      <span key={index}>
+        {line}
+        {index < text.split('\n').length - 1 && <br />}
+      </span>
+    ));
   };
 
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -321,7 +331,7 @@ export default function Header() {
           <div className="chatbot-messages">
             {chatHistory.map((msg) => (
               <div key={msg.id} className={`chatbot-message ${msg.type}`}>
-                {msg.message}
+                {formatMessage(msg.message)}
                 {msg.image && (
                   <div className="message-image">
                     <img src={msg.image} alt="첨부된 이미지" />

@@ -11,7 +11,7 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
-    origin: "http://localhost:3000",
+    origin: "http://localhost:8000",
     methods: ["GET", "POST"]
   }
 });
@@ -49,7 +49,7 @@ io.on('connection', (socket) => {
   });
 });
 
-const PORT = process.env.PORT || 4000;
+const PORT = process.env.PORT || 8001;
 server.listen(PORT, () => {
   console.log(`API server running on port ${PORT}`);
   console.log(`WebSocket server ready`);

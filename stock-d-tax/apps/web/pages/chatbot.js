@@ -35,8 +35,12 @@ export default function ChatbotPage() {
     setIsLoading(true);
 
     try {
-      const response = await axios.post('http://localhost:4000/api/chatbot/message', {
+      const response = await axios.post('http://localhost:8001/api/chatbot/message', {
         message: msg
+      }, {
+        headers: {
+          'Content-Type': 'application/json'
+        }
       });
 
       setMessages((prev) => [
@@ -61,6 +65,16 @@ export default function ChatbotPage() {
     }
   };
 
+  // 줄바꿈을 <br> 태그로 변환하는 함수
+  const formatMessage = (text) => {
+    return text.split('\n').map((line, index) => (
+      <span key={index}>
+        {line}
+        {index < text.split('\n').length - 1 && <br />}
+      </span>
+    ));
+  };
+
   return (
     <div className="dashboard-container">
       <h1>스탁디택스 챗봇</h1>
@@ -68,7 +82,7 @@ export default function ChatbotPage() {
         <div className="chatbot-container">
           <div className="chat-messages">
             {messages.map((m, i) => (
-              <div key={i} className={`chat-message ${m.type}`}>{m.content}</div>
+              <div key={i} className={`chat-message ${m.type}`}>{formatMessage(m.content)}</div>
             ))}
             {isLoading && (
               <div className="chat-message bot loading">

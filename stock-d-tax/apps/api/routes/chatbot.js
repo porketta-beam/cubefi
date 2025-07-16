@@ -23,8 +23,7 @@ router.post('/message', async (req, res) => {
         timestamp: new Date().toISOString()
       }
     });
-    
-  } catch (error) {
+} catch (error) {
     console.error('Chatbot error:', error);
     res.status(500).json({ 
       error: '챗봇 응답 생성 중 오류가 발생했습니다.' 
