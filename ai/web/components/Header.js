@@ -156,7 +156,7 @@ export default function Header() {
         formData.append('image', blob, 'image.jpg');
       }
 
-      const apiResponse = await fetch('http://localhost:8000/api/chatbot/message', {
+      const apiResponse = await fetch('http://localhost:8001/api/chatbot/message', {
         method: 'POST',
         body: formData,
       });
