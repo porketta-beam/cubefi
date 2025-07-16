@@ -1,0 +1,175 @@
+{
+  "master": {
+    "tasks": [
+      {
+        "id": 1,
+        "title": "프로젝트 저장소 스캐폴딩 및 기본 FastAPI 헬스체크",
+        "description": "Poetry 기반 패키지 관리, pre-commit, lint, 테스트 폴더를 설정하고 FastAPI 서버에 헬스체크 라우트를 노출한다.",
+        "details": "• poetry new tax_rag_backend && cd tax_rag_backend\n• pyproject.toml 에 fastapi==0.111, uvicorn[standard]==0.30, pydantic==2 추가\n• pre-commit: ruff, black, isort, mypy 훅 설정\n• main.py\n    from fastapi import FastAPI\n    app = FastAPI(title=\"Tax RAG API\")\n    @app.get(\"/health\")\n    async def health():\n        return {\"status\": \"ok\"}\n• uvicorn main:app --reload 로 수동 기동 확인",
+        "testStrategy": "pytest 에서 /health 호출 → 200 & {\"status\":\"ok\"} 검증\nCI(GitHub Actions) 에 pytest + ruff + mypy 워크플로우 추가",
+        "priority": "medium",
+        "dependencies": [],
+        "status": "deferred",
+        "subtasks": []
+      },
+      {
+        "id": 2,
+        "title": "Redis 세션 메모리 레이어 구축",
+        "description": "ConversationBufferWindowMemory 를 RedisChatMessageHistory 로 래핑하여 세션별 k턴(6) 단기 컨텍스트를 저장/조회한다.",
+        "details": "• poetry add redis>=5.0 langchain==0.2\n• settings.py: REDIS_URL env 로드, redis.asyncio.Redis 풀 생성\n• memory.py\n    class RedisSessionMemory(ConversationBufferWindowMemory):\n        def __init__(self,k:int=6):\n            super().__init__(chat_memory=RedisChatMessageHistory(\n                 session_id=\"\", k=k, ttl=1800, client=redis_client))\n• LPUSH/LTRIM 구현, HistoryItem 모델 직렬화는 orjson 사용",
+        "testStrategy": "pytest-asyncio 로 세션 생성→ 8회 메시지 삽입 후 길이 6 확인\nTTL 만료 모킹하여 자동 삭제 검증",
+        "priority": "medium",
+        "dependencies": [],
+        "status": "in-progress",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "환경 변수 로딩 및 Redis 클라이언트 풀 초기화",
+            "description": "settings.py에서 REDIS_URL을 읽어 비동기 Redis 풀(redis.asyncio.Redis)을 생성한다.",
+            "dependencies": [],
+            "details": "• dotenv 또는 pydantic Settings 사용\n• 싱글톤 패턴으로 redis_client 노출\n• poetry add redis>=5.0\n• 실패 시 예외 로깅",
+            "status": "in-progress",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "ChatMessageHistory 직렬화 포맷 정의",
+            "description": "HistoryItem 모델과 orjson 기반 직렬화/역직렬화 헬퍼를 구현한다.",
+            "dependencies": [
+              1
+            ],
+            "details": "• dataclass HistoryItem(role:str, content:str, ts:float)\n• dumps/loads 래퍼에서 orjson 사용\n• 유닛 테스트로 round-trip 보장",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "RedisSessionMemory 클래스 구현",
+            "description": "ConversationBufferWindowMemory를 상속해 k-턴 윈도우 및 TTL 지원 Redis 저장소를 완성한다.",
+            "dependencies": [
+              2
+            ],
+            "details": "• __init__(session_id:str,k:int=6,ttl:int=1800)\n• add_message → LPUSH + LTRIM\n• messages → LRANGE 역순 반환 후 loads\n• expire 설정으로 TTL 갱신",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "pytest-asyncio 기반 TTL·윈도우 검증 테스트 작성",
+            "description": "8회 메시지 삽입 시 길이 6 유지 및 TTL 만료 후 자동 삭제를 모킹하여 검증한다.",
+            "dependencies": [
+              3
+            ],
+            "details": "• fakeredis 또는 시간 모킹 사용\n• assert len(memory.messages)==6\n• fast-forward 1801s 후 키 미존재 확인",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 5,
+            "title": "문서화 및 예제 코드 작성",
+            "description": "README 및 docstring에 사용 방법, 예제 세션 코드, 테스트 실행법을 추가한다.",
+            "dependencies": [
+              4
+            ],
+            "details": "• README: 설치→환경변수→예제 스니펫\n• docs/source/memory.md 작성\n• 코드 블록에 async 사용 예시 포함",
+            "status": "pending",
+            "testStrategy": ""
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "임베딩 파이프라인 및 Chroma 벡터 DB 초기화",
+        "description": "세법 문서 크롤링 결과를 text-embedding-3-large 로 임베딩한 뒤 Chroma 0.5 영구 클라이언트에 적재한다.",
+        "details": "• poetry add chromadb==0.5 openai==1.25 duckdb\n• ingest.py\n    docs = load_documents(\"data/tax_docs/*.md\")\n    embeddings = OpenAIEmbeddings(model=\"text-embedding-3-large\",chunk_size=512)\n    vectordb = Chroma(collection_name=\"tax_docs\",embedding_function=embeddings,persist_directory=\".chroma\")\n    vectordb.add_documents(docs)\n    vectordb.persist()\n• nightly_backup.sh → aws s3 sync .chroma s3://backup",
+        "testStrategy": "pytest 로 3개 샘플 문서 임베딩 후 vectordb.similarity_search(\"양도소득세\") 결과 top-k>0 확인\nS3 모킹으로 백업 스크립트 exit 0 검증",
+        "priority": "medium",
+        "dependencies": [],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 4,
+        "title": "RAG 검색 체인 구성",
+        "description": "LangChain StuffDocumentsChain 을 이용해 검색→응답 파이프라인을 생성하고 citations 메타데이터를 유지한다.",
+        "details": "• poetry add langchain-openai==0.2\n• rag_chain.py\n    retriever = vectordb.as_retriever(search_kwargs={\"k\":4})\n    llm = ChatOpenAI(model_name=\"gpt-4o-mini\",temperature=0.2)\n    chain = (RunnableWithMessageHistory(\n        StuffDocumentsChain(llm=llm,retriever=retriever),\n        memory=RedisSessionMemory()))\n    chain = chain.with_config(tags=[\"rag\",\"tax\"],callbacks=[langsmith_tracer])\n• output_parser 에 citation_index 삽입",
+        "testStrategy": "로컬 함수 호출로 \"ISA 세금 면제 한도?\" 질의 → chain 반환 dict 에 \"citations\" 리스트 길이>0 검증",
+        "priority": "medium",
+        "dependencies": [],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 5,
+        "title": "SSE 스트리밍 어댑터 및 /chat 엔드포인트 구현",
+        "description": "LangChain Runnable 과 FastAPI StreamingResponse 를 연결하여 GPT 토큰을 실시간으로 SSE 포맷으로 전송한다.",
+        "details": "• poetry add sse-starlette\n• sse_adapter.py\n    async def stream_chain(request,chat_req):\n        async for chunk in chain.astream(chat_req.message,session_id=chat_req.session_id):\n            yield f\"data:{chunk.json()}\\n\\n\"\n• routes/chat.py\n    @router.post(\"/chat\")\n    async def chat(req:ChatRequest):\n        return EventSourceResponse(stream_chain(req))\n• JWT 헤더 검증: fastapi-security==0.7, upstream JWKS 캐시\n• CORS 미들웨어 *허용",
+        "testStrategy": "pytest-asyncio + httpx.AsyncClient 로 /chat 호출 → 이벤트 스트림을 수신, finish==True 포함 검증",
+        "priority": "medium",
+        "dependencies": [],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 6,
+        "title": "세금 계산기 Python 모듈 개발",
+        "description": "종합과세, ISA, 연금 시나리오별 세후 수익률을 결정론적으로 계산하는 pydantic 입출력 함수 제공.",
+        "details": "• calculator/models.py\n    class TaxCalcInput(BaseModel): invest:int; horizon:int; product:str\n    class TaxCalcOutput(BaseModel): after_tax_return:Decimal; tax_paid:Decimal\n• calculator/core.py\n    def calc(input:TaxCalcInput)->TaxCalcOutput:\n        ...  # 국세청 세율 테이블 상수화하여 공식 구현\n• LangChain Tool 로 wrap: StructuredTool from langchain.tools",
+        "testStrategy": "pytest 로 국세청 예시 케이스와 일치하는 결과(assert Decimal(\"0.1543\"))\n단위 테스트 커버리지 95% 이상",
+        "priority": "medium",
+        "dependencies": [],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 7,
+        "title": "/history 엔드포인트 구현",
+        "description": "Redis 에 저장된 최근 k턴 대화내역을 조회하여 반환한다.",
+        "details": "• routes/history.py\n    @router.get(\"/history/{session_id}\")\n    async def history(session_id:UUID):\n        msgs = redis_client.lrange(f\"session:{session_id}\",0,k-1)\n        return [HistoryItem.model_validate_json(m) for m in msgs]\n• FastAPI response_model=List[HistoryItem]",
+        "testStrategy": "pytest 로 대화 3턴 입력 후 GET /history 반환 길이 3 확인 및 순서 역순 아님 확인",
+        "priority": "medium",
+        "dependencies": [],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 8,
+        "title": "/evaluate 엔드포인트 및 RAGAS 배치 스크립트",
+        "description": "POST /evaluate 로 들어온 dataset_id 를 Celery 비동기 작업으로 전달하고 RAGAS 메트릭을 산출한다.",
+        "details": "• poetry add ragas==0.2 celery[redis]\n• tasks/eval.py\n    @celery_app.task\n    def run_ragas(dataset_id):\n        ds = load_dataset(dataset_id)\n        metrics = evaluate(ds,rag_pipeline)\n        store_results(metrics)\n• routes/evaluate.py\n    @router.post(\"/evaluate\")\n    async def evaluate(req:EvalRequest):\n        task_id = run_ragas.delay(req.dataset_id)\n        return {\"task_id\":task_id}\n• GitHub Actions: schedule: \"0 3 * * *\" → poetry run celery -A tasks.eval",
+        "testStrategy": "pytest 로 dataset fixture → run_ragas.s(dataset_id).apply().get() 의 결과에서 fidelity, context_precision 키 존재 확인",
+        "priority": "medium",
+        "dependencies": [],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 9,
+        "title": "LangSmith 및 OpenTelemetry 관측성 통합",
+        "description": "모든 LangChain 호출, FastAPI 요청에 대해 분산 추적, 지연시간, 오류율을 LangSmith 대시보드에 기록한다.",
+        "details": "• poetry add langsmith==0.3 opentelemetry-sdk opentelemetry-exporter-otlp\n• settings.py: LANGSMITH_API_KEY env\n• tracing.py\n    from langsmith.wrappers import wrap_chain\n    chain = wrap_chain(chain)\n    FastAPIInstrumentor.instrument_app(app, excluded_urls=\"/health\")",
+        "testStrategy": "pytest → chain.invoke dummy 시 LangSmith run_id 반환 확인\nLocust 로 100 rps 부하 → OTLP collector 에서 trace 수집 100% 샘플링 확인",
+        "priority": "medium",
+        "dependencies": [],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 10,
+        "title": "OpenAPI 문서 검수 및 전면 단위 테스트 보강",
+        "description": "FastAPI 자동 스키마를 검토하고 pydantic 모델 예제 추가, pytest 에서 모든 라우트 케이스를 커버 후 CI 배지 표시.",
+        "details": "• main.py 에 app = FastAPI(openapi_tags=[...])\n• 각 모델 Config.model_config[\"json_schema_extra\"] 로 example 삽입\n• pytest-cov 및 fastapi-testclient 로 /chat,/history,/evaluate 표준 시나리오 작성\n• README.md 에 coverage badge, docs url 명시",
+        "testStrategy": "pytest-cov 90% 기준을 GH Actions에서 강제, schemathesis 로 openapi.yaml fuzz => 0 error 통과",
+        "priority": "medium",
+        "dependencies": [],
+        "status": "pending",
+        "subtasks": []
+      }
+    ],
+    "metadata": {
+      "created": "2025-07-15T09:33:41.655Z",
+      "updated": "2025-07-15T10:48:38.063Z",
+      "description": "Tasks for master context"
+    }
+  }
+}
