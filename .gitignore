@@ -185,3 +185,7 @@ dev-debug.log
 **/.claude/
 
 rag_lab/ref/1_openai.ipynb
+
+# Chroma DB files
+**/chroma_db/
+**/chroma_db/**
