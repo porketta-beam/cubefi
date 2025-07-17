@@ -28,10 +28,13 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use('/api/tax', taxRoutes);
 app.use('/api/chatbot', chatbotRoutes);
 
+
 // 기본 라우트
 app.get('/', (req, res) => {
   res.json({ message: 'Stock D-TAX API Server' });
 });
+
+
 
 // WebSocket 연결
 io.on('connection', (socket) => {
