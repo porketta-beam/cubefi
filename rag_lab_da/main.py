@@ -7,6 +7,10 @@ import os
 import datetime
 from openai import OpenAI
 from dotenv import load_dotenv
+from langchain_openai import ChatOpenAI
+from langchain.memory import ConversationBufferMemory
+from langchain.chains import ConversationChain
+from langchain.prompts import PromptTemplate
 
 # Load environment variables
 load_dotenv()
@@ -25,13 +29,27 @@ app.add_middleware(
 # OpenAI client
 openai = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+# LangChain 메모리 설정
+llm = ChatOpenAI(
+    model="gpt-3.5-turbo",
+    temperature=0.7,
+    openai_api_key=os.getenv("OPENAI_API_KEY")
+)
+
+# 대화 메모리 (사용자별로 관리)
+conversation_memories = {}
+
 # Pydantic models
 class ChatbotMessage(BaseModel):
     message: str
+    user_id: Optional[str] = "default"
 
 class ChatbotResponse(BaseModel):
     success: bool
     data: dict
+
+class ClearMemoryRequest(BaseModel):
+    user_id: str = "default"
 
 # 세금 관련 지식 베이스 (RAG용)
 tax_knowledge_base = [
@@ -69,8 +87,66 @@ def find_relevant_knowledge(user_question: str) -> str:
     
     return '\n\n'.join(relevant_docs)
 
+def get_user_memory(user_id: str):
+    """사용자별 메모리 반환"""
+    if user_id not in conversation_memories:
+        conversation_memories[user_id] = ConversationBufferMemory(
+            memory_key="history",
+            return_messages=True
+        )
+    return conversation_memories[user_id]
+
+def create_conversation_chain(user_id: str):
+    """사용자별 대화 체인 생성"""
+    memory = get_user_memory(user_id)
+    
+    prompt_template = """
+    당신은 주식 투자 세금 전문가입니다. 다음 세금 관련 지식을 바탕으로 사용자의 질문에 답변해주세요.
+
+    세금 관련 지식:
+    {rag_context}
+
+    대화 기록:
+    {history}
+
+    사용자: {input}
+    세금 전문가:
+    """
+    
+    prompt = PromptTemplate(
+        input_variables=["rag_context", "history", "input"],
+        template=prompt_template
+    )
+    
+    return ConversationChain(
+        llm=llm,
+        memory=memory,
+        prompt=prompt,
+        verbose=False
+    )
+
+async def generate_response_with_memory(user_message: str, user_id: str = "default") -> str:
+    """메모리를 사용한 OpenAI API 호출"""
+    try:
+        # RAG: 관련 지식 검색
+        relevant_knowledge = find_relevant_knowledge(user_message)
+        
+        # 사용자별 대화 체인 생성
+        conversation_chain = create_conversation_chain(user_id)
+        
+        # 대화 체인으로 응답 생성
+        response = conversation_chain.predict(
+            input=user_message,
+            rag_context=relevant_knowledge
+        )
+        
+        return response
+    except Exception as error:
+        print(f'LangChain API Error: {error}')
+        return "죄송합니다. 일시적인 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
+
 async def generate_response(user_message: str) -> str:
-    """OpenAI API 호출"""
+    """기존 OpenAI API 호출 (메모리 없음)"""
     try:
         # RAG: 관련 지식 검색
         relevant_knowledge = find_relevant_knowledge(user_message)
@@ -109,24 +185,26 @@ def read_item(item_id: int, q: Optional[str] = None):
     return {"item_id": item_id, "q": q}
 
 @app.post("/api/chatbot/message")
-async def chatbot_message(message: str = Form(...)):
-    """챗봇 메시지 처리"""
+async def chatbot_message(message: str = Form(...), user_id: str = Form("default")):
+    """챗봇 메시지 처리 (메모리 기능 포함)"""
     try:
         print("=== RECEIVED MESSAGE ===")
-        print(message)
+        print(f"Message: {message}")
+        print(f"User ID: {user_id}")
         print("=== RECEIVED MESSAGE END ===")
         
         if not message:
             return {"error": "메시지가 필요합니다."}
         
-        # OpenAI API로 응답 생성
-        response = await generate_response(message)
+        # 메모리를 사용한 응답 생성
+        response = await generate_response_with_memory(message, user_id)
         
         return {
             "success": True,
             "data": {
                 "message": response,
-                "timestamp": str(datetime.datetime.now().isoformat())
+                "timestamp": str(datetime.datetime.now().isoformat()),
+                "user_id": user_id
             }
         }
         
@@ -135,6 +213,42 @@ async def chatbot_message(message: str = Form(...)):
         print(error)
         print(f'=== CHATBOT ERROR END ===')
         return {"error": "챗봇 응답 생성 중 오류가 발생했습니다."}
+
+@app.post("/api/chatbot/clear-memory")
+async def clear_memory(request: ClearMemoryRequest):
+    """사용자 대화 메모리 초기화"""
+    try:
+        if request.user_id in conversation_memories:
+            conversation_memories[request.user_id].clear()
+            return {
+                "success": True,
+                "message": f"사용자 {request.user_id}의 대화 메모리가 초기화되었습니다."
+            }
+        else:
+            return {
+                "success": True,
+                "message": f"사용자 {request.user_id}의 메모리가 존재하지 않습니다."
+            }
+    except Exception as error:
+        print(f'=== CLEAR MEMORY ERROR ===')
+        print(error)
+        return {"error": "메모리 초기화 중 오류가 발생했습니다."}
+
+@app.get("/api/chatbot/users")
+async def get_all_users():
+    """모든 사용자 목록 조회"""
+    try:
+        users = list(conversation_memories.keys())
+        return {
+            "success": True,
+            "data": {
+                "users": users
+            }
+        }
+    except Exception as error:
+        print(f'=== GET USERS ERROR ===')
+        print(error)
+        return {"error": "사용자 목록 조회 중 오류가 발생했습니다."}
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

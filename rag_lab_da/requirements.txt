@@ -12,6 +12,8 @@ httptools==0.6.4
 httpx==0.28.1
 idna==3.10
 jiter==0.10.0
+langchain==0.2.16
+langchain-openai==0.1.25
 openai==1.97.0
 pydantic==2.11.7
 pydantic_core==2.33.2
