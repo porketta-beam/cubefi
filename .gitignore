@@ -185,3 +185,5 @@ dev-debug.log
 **/.claude/
 
 rag_lab/ref/1_openai.ipynb
+
+.venv/
