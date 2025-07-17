@@ -207,11 +207,35 @@ export default function Header() {
 
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showProfileDropdown, setShowProfileDropdown] = useState(false);
 
   const handleLogin = () => {
     setIsLoggedIn(true);
     setShowLoginModal(false);
   };
+
+  const handleLogout = () => {
+    setIsLoggedIn(false);
+    setShowProfileDropdown(false);
+  };
+
+  const toggleProfileDropdown = () => {
+    setShowProfileDropdown(!showProfileDropdown);
+  };
+
+  // 외부 클릭 시 프로필 드롭다운 닫기
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showProfileDropdown && !event.target.closest('.user-profile-container')) {
+        setShowProfileDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showProfileDropdown]);
 
   return (
     <>
@@ -222,6 +246,7 @@ export default function Header() {
               Stock D-TAX
             </Link>
             <nav className="header-nav">
+            <Link href="/" className={`nav-link ${isActive('/') ? 'active' : ''}`}>서비스 소개</Link>
             <Link href="/dashboard" className={`nav-link ${isActive('/dashboard') ? 'active' : ''}`}>대시보드</Link>
               <Link href="/chart" className={`nav-link ${isActive('/chart') ? 'active' : ''}`}>차트</Link>
               <Link href="/assets" className={`nav-link ${isActive('/assets') ? 'active' : ''}`}>자산</Link>
@@ -237,23 +262,38 @@ export default function Header() {
             </button>
           </div>
           <div className="header-right">
-            <div className="profile">
-              
-              <div className="homepage-auth">
-            {!isLoggedIn ? (
-              <button 
-                className="login-btn"
-                onClick={() => setShowLoginModal(true)}
-              >
-                로그인
-              </button>
-            ) : (
-              <div className="user-profile">
-                <span className="user-avatar">👤</span>
-                <span className="user-name">이주현님</span>
-              </div>
-            )}
-          </div>
+            <div className="homepage-auth">
+              {!isLoggedIn ? (
+                <button 
+                  className="login-btn"
+                  onClick={() => setShowLoginModal(true)}
+                >
+                  로그인
+                </button>
+              ) : (
+                <div className="user-profile-container">
+                  <div 
+                    className={`user-profile ${showProfileDropdown ? 'active' : ''}`}
+                    onClick={toggleProfileDropdown}
+                  >
+                    <span className="user-avatar">👤</span>
+                    <span className="user-name">이주현님</span>
+                    <span className="dropdown-arrow">{showProfileDropdown ? '▲' : '▼'}</span>
+                  </div>
+                  {showProfileDropdown && (
+                    <div className="profile-dropdown">
+                      <Link href="/assets" className="dropdown-item" onClick={() => setShowProfileDropdown(false)}>
+                        <span className="dropdown-icon">💼</span>
+                        <span>내 자산 보러가기</span>
+                      </Link>
+                      <button className="dropdown-item logout-item" onClick={handleLogout}>
+                        <span className="dropdown-icon">🚪</span>
+                        <span>로그아웃</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             <button className="header-icon" title="다운로드">&#8681;</button>
             <button className="header-icon" title="도움말">&#10068;</button>
