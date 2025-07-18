@@ -1,22 +1,24 @@
 from dotenv import load_dotenv
 import os
+from langchain.chains import create_retrieval_chain
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
 
 load_dotenv(override=True)
 api = os.getenv("API2")
 model = "gpt-4o-mini"
 
-from openai import OpenAI
-client = OpenAI(api_key=api)
 
 def bot_response(history):
-    response = client.chat.completions.create(
-        model=model,
-        messages=history,
-        temperature=0.5,
-        max_tokens=1024,
-        top_p=1,
-        frequency_penalty=0,
-        presence_penalty=0,
-        stream=True
+    llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0)
+    prompt = ChatPromptTemplate.from_template(
+        "History: {history}\nQuestion: {input}"
     )
-    return response
+    chain = prompt | llm
+
+    for chunk in chain.stream({
+        "input": history[-1]["content"],  # 가장 최근 질문
+        "history": history
+    }):
+        if hasattr(chunk, "content") and chunk.content:
+            yield chunk.content

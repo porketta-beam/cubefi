@@ -41,18 +41,12 @@ async def websocket_chat(websocket: WebSocket):
                     "message": "스트리밍 시작"
                 }))
                 
-                # 스트리밍 응답 전송
                 for chunk in response_stream:
-                    if chunk.choices[0].delta.content:
-                        content = chunk.choices[0].delta.content
-                        
-                        # JSON 형태로 청크 전송
+                    if chunk:  # chunk가 빈 문자열이 아닐 때만
                         await websocket.send_text(json.dumps({
                             "type": "chunk",
-                            "content": content
+                            "content": chunk
                         }, ensure_ascii=False))
-                        
-                        # 실시간 렌더링을 위한 더 짧은 지연
                         await asyncio.sleep(0.005)
                 
                 # 스트리밍 완료 신호
