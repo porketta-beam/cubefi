@@ -825,7 +825,7 @@ with tab4:
                     )
                     chain = create_retrieval_chain(
                         retriever=retriever,
-                        combine_docs_chain=prompt | llm
+                        combine_docs_chain=prompt | llm 
                     )
                     
                     # Evaluate with RAGAS
