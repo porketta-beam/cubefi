@@ -10,7 +10,6 @@ import {
   Tooltip,
   Legend,
 } from 'chart.js';
-import DividendCalendar from '../components/DividendCalendar';
 
 ChartJS.register(
   CategoryScale,
@@ -100,8 +99,6 @@ export default function Home() {
           <div className="card-desc">세금 부담 최소화, 실질 수익 극대화</div>
         </div>
       </div>
-
-      <DividendCalendar />
 
       <div className="chart-section">
         <h2>실현수익 추이</h2>

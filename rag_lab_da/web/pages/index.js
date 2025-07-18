@@ -1,86 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Head from 'next/head';
 
 export default function Home() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
-  const [activeSection, setActiveSection] = useState('');
-  const [isScrolling, setIsScrolling] = useState(false);
 
   const handleLogin = () => {
     setIsLoggedIn(true);
     setShowLoginModal(false);
   };
-
-  const scrollToSection = (sectionId) => {
-    const element = document.getElementById(sectionId);
-    if (element) {
-      setIsScrolling(true);
-      element.scrollIntoView({ 
-        behavior: 'smooth',
-        block: 'start'
-      });
-      
-      // 스크롤 완료 후 감지 재개 (약간의 지연 후)
-      setTimeout(() => {
-        setIsScrolling(false);
-      }, 1000);
-    }
-  };
-
-  // 스크롤 이벤트로 현재 섹션 감지
-  useEffect(() => {
-    const handleScroll = () => {
-      // 수동 스크롤 중이면 자동 감지 건너뛰기
-      if (isScrolling) return;
-      
-      const sections = ['features', 'mydata', 'tax-saving-section', 'comparison'];
-      const scrollPosition = window.scrollY + 200;
-
-      let currentSection = 'features';
-      
-      // 페이지 상단 근처면 features로 설정
-      if (scrollPosition < 300) {
-        currentSection = 'features';
-      } else {
-        // 각 섹션을 역순으로 확인하여 현재 보이는 섹션 찾기
-        for (let i = sections.length - 1; i >= 0; i--) {
-          const section = document.getElementById(sections[i]);
-          if (section && section.offsetTop <= scrollPosition) {
-            currentSection = sections[i] === 'tax-saving-section' ? 'calculator' : sections[i];
-            break;
-          }
-        }
-      }
-
-      if (activeSection !== currentSection) {
-        setActiveSection(currentSection);
-      }
-    };
-
-    // 초기 로드 시 섹션 감지
-    const detectInitialSection = () => {
-      if (window.scrollY < 100) {
-        setActiveSection('features');
-      } else {
-        handleScroll();
-      }
-    };
-
-    window.addEventListener('scroll', handleScroll);
-    
-    // 페이지 로드 완료 후 초기 섹션 감지
-    if (document.readyState === 'complete') {
-      detectInitialSection();
-    } else {
-      window.addEventListener('load', detectInitialSection);
-    }
-
-    return () => {
-      window.removeEventListener('scroll', handleScroll);
-      window.removeEventListener('load', detectInitialSection);
-    };
-  }, [isScrolling, activeSection]);
 
   return (
     <>
@@ -91,53 +19,19 @@ export default function Home() {
         <link rel="icon" href="/favicon.ico" />
       </Head>
 
-      {/* Side Navigation */}
-      <div className="side-nav">
-        <div className="side-nav-container">
-          <div className="side-nav-tabs">
-            <button 
-              className={`side-nav-tab ${activeSection === 'features' ? 'active' : ''}`}
-              onClick={() => {
-                setActiveSection('features');
-                scrollToSection('features');
-              }}
-            >
-              <span className="tab-icon">🚀</span>
-              <span className="tab-text">서비스 소개</span>
-            </button>
-            <button 
-              className={`side-nav-tab ${activeSection === 'mydata' ? 'active' : ''}`}
-              onClick={() => {
-                setActiveSection('mydata');
-                scrollToSection('mydata');
-              }}
-            >
-              <span className="tab-icon">🔗</span>
-              <span className="tab-text">자산 연결</span>
-            </button>
-            <button 
-              className={`side-nav-tab ${activeSection === 'calculator' ? 'active' : ''}`}
-              onClick={() => {
-                setActiveSection('calculator');
-                scrollToSection('tax-saving-section');
-              }}
-            >
-              <span className="tab-icon">🧮</span>
-              <span className="tab-text">세금 계산기</span>
-            </button>
-            <button 
-              className={`side-nav-tab ${activeSection === 'comparison' ? 'active' : ''}`}
-              onClick={() => {
-                setActiveSection('comparison');
-                scrollToSection('comparison');
-              }}
-            >
-              <span className="tab-icon">🏦</span>
-              <span className="tab-text">계좌 비교</span>
-            </button>
-          </div>
+      {/* Header */}
+      <header className="homepage-header">
+        <div className="homepage-header-container">
+          
+          <nav className="homepage-nav">
+            <a href="#features" className="nav-link">서비스 소개</a>
+            <a href="#calculator" className="nav-link">세금 계산기</a>
+            <a href="#comparison" className="nav-link">계좌 비교</a>
+            <a href="#mydata" className="nav-link">자산 연결</a>
+          </nav>
+          
         </div>
-      </div>
+      </header>
 
       {/* Hero Section */}
       <section className="hero-section">
@@ -308,7 +202,7 @@ export default function Home() {
       </section>
 
       {/* Tax Saving Alert Section */}
-      <section className="tax-saving-section" id="tax-saving-section">
+      <section className="tax-saving-section">
         <div className="container">
           <div className="tax-saving-content">
             <div className="tax-saving-header">
@@ -342,8 +236,8 @@ export default function Home() {
                 </div>
                 <button className="alert-cta">절세 전략 보기</button>
               </div>
-        </div>
-      </div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -432,7 +326,7 @@ export default function Home() {
                 <div className="tax-label">예상 세금</div>
                 <div className="tax-amount">134,750원</div>
               </div>
-      </div>
+            </div>
 
             <div className="comparison-card">
               <div className="account-header">
@@ -552,9 +446,9 @@ export default function Home() {
                 </div>
               </div>
             </div>
-      </div>
-    </div>
+          </div>
+        </div>
       )}
     </>
   );
-}
+} 
