@@ -1,6 +1,11 @@
+'use client'
+
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useState, useRef, useEffect } from 'react';
+import { flushSync } from 'react-dom';
+import React from 'react';
+import { sendChatMessage } from '../util/websocket';
 
 export default function Header() {
   const router = useRouter();
@@ -10,18 +15,18 @@ export default function Header() {
     {
       id: 1,
       type: 'bot',
-      message: '안녕하세요! D-TAX BOT입니다. 주식 투자 세금에 대해 궁금한 점이 있으시면 언제든 물어보세요. 📊💰\n\n빠른 질문 버튼을 클릭하거나 직접 질문해주세요!',
-      image: null
+      message: '안녕하세요! D-TAX BOT입니다. 주식 투자 세금에 대해 궁금한 점이 있으시면 언제든 물어보세요. 📊💰\n\n빠른 질문 버튼을 클릭하거나 직접 질문해주세요!'
     }
   ]);
   const [isTyping, setIsTyping] = useState(false);
+  const [streamingMessage, setStreamingMessage] = useState(''); // 스트리밍 중인 메시지
+  const [streamingId, setStreamingId] = useState(null); // 스트리밍 중인 메시지 ID
+  const streamingRef = useRef(null); // 스트리밍 메시지 DOM 참조
   const [isDragging, setIsDragging] = useState(false);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
-  const [selectedImage, setSelectedImage] = useState(null);
   const chatbotRef = useRef(null);
   const messagesEndRef = useRef(null);
-  const fileInputRef = useRef(null);
 
   const isActive = (path) => router.pathname === path;
 
@@ -88,102 +93,95 @@ export default function Header() {
     }
   }, [isDragging, dragOffset]);
 
-  // 이미지 업로드 처리
-  const handleImageUpload = (e) => {
-    const file = e.target.files[0];
-    if (file && file.type.startsWith('image/')) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setSelectedImage(e.target.result);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
 
-  // 드래그 앤 드롭 처리
-  const handleDragOver = (e) => {
-    e.preventDefault();
-  };
-
-  const handleDrop = (e) => {
-    e.preventDefault();
-    const files = e.dataTransfer.files;
-    if (files.length > 0 && files[0].type.startsWith('image/')) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setSelectedImage(e.target.result);
-      };
-      reader.readAsDataURL(files[0]);
-    }
-  };
-
-  // 이미지 제거
-  const removeImage = () => {
-    setSelectedImage(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
 
   const handleChatSubmit = async (e) => {
     e.preventDefault();
-    if (!chatMessage.trim() && !selectedImage) return;
+    if (!chatMessage.trim()) return;
 
-    await sendMessage(chatMessage, selectedImage);
+    await sendMessage(chatMessage);
   };
 
-  const sendMessage = async (message, image = null) => {
+  const sendMessage = async (message) => {
     // 사용자 메시지 추가
     const userMessage = {
       id: Date.now(),
       type: 'user',
-      message: message,
-      image: image
+      message: message
     };
     setChatHistory(prev => [...prev, userMessage]);
     setChatMessage('');
-    setSelectedImage(null);
     setIsTyping(true);
 
     try {
-      // API 호출 (이미지 포함)
-      const formData = new FormData();
-      formData.append('message', message || '이미지를 분석해주세요');
-      if (image) {
-        // Base64 이미지를 Blob으로 변환
-        const response = await fetch(image);
-        const blob = await response.blob();
-        formData.append('image', blob, 'image.jpg');
-      }
-
-      const apiResponse = await fetch('http://localhost:8000/api/chatbot/message', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!apiResponse.ok) {
-        throw new Error(`HTTP error! status: ${apiResponse.status}`);
-      }
-
-      const data = await apiResponse.json();
-      console.log('API Response:', data);
+      // WebSocket 방식 - 모듈화된 유틸리티 사용
+      let botMsg = '';
+      const botMessageId = Date.now() + 1;
       
-      // 봇 응답 추가 (이미지 포함 가능)
-      const botMessage = {
-        id: Date.now() + 1,
-        type: 'bot',
-        message: data.response || data.data?.message || '응답을 받지 못했습니다.',
-        image: data.image || null
-      };
-      setChatHistory(prev => [...prev, botMessage]);
+      // 스트리밍 상태 초기화
+      setStreamingId(botMessageId);
+      setStreamingMessage('');
+      setIsTyping(false);
+
+      try {
+        await sendChatMessage(message, {
+          onStart: () => {
+            console.log('스트리밍 시작');
+            botMsg = '';
+            setStreamingMessage('');
+          },
+          onChunk: (content) => {
+            console.log('청크 내용:', content);
+            botMsg += content;
+            
+            // DOM 직접 업데이트로 즉시 반영 (개행문자 처리)
+            if (streamingRef.current) {
+              streamingRef.current.innerHTML = botMsg.replace(/\n/g, '<br>');
+            }
+            
+            // 스크롤 즉시 적용
+            requestAnimationFrame(scrollToBottom);
+          },
+          onDone: () => {
+            console.log('스트리밍 완료');
+            // 최종 메시지를 채팅 히스토리에 추가
+            setChatHistory(prev => [...prev, {
+              id: botMessageId,
+              type: 'bot',
+              message: botMsg || '응답을 받지 못했습니다.'
+            }]);
+            
+            // 스트리밍 상태 정리
+            setStreamingId(null);
+            setStreamingMessage('');
+          },
+          onError: (errorMessage) => {
+            console.error('WebSocket 오류:', errorMessage);
+            setChatHistory(prev => [...prev, {
+              id: botMessageId,
+              type: 'bot',
+              message: errorMessage || 'WebSocket 연결 오류가 발생했습니다. 네트워크를 확인해주세요.'
+            }]);
+            setStreamingId(null);
+            setStreamingMessage('');
+          }
+        });
+      } catch (error) {
+        console.error('WebSocket 연결 실패:', error);
+        setChatHistory(prev => [...prev, {
+          id: botMessageId,
+          type: 'bot',
+          message: '연결 시간이 초과되었습니다. 다시 시도해주세요.'
+        }]);
+        setStreamingId(null);
+        setStreamingMessage('');
+      }
     } catch (error) {
-      console.error('Chatbot API Error:', error);
       // 에러 시 기본 응답
       const botMessage = {
         id: Date.now() + 1,
         type: 'bot',
-        message: `죄송합니다. 일시적인 오류가 발생했습니다. (${error.message})`,
-        image: null
+        message: '죄송합니다. 일시적인 오류가 발생했습니다. 잠시 후 다시 시도해주세요.'
       };
       setChatHistory(prev => [...prev, botMessage]);
     } finally {
@@ -195,48 +193,6 @@ export default function Header() {
     sendMessage(question);
   };
 
-  // 줄바꿈을 <br> 태그로 변환하는 함수
-  const formatMessage = (text) => {
-    return text.split('\n').map((line, index) => (
-      <span key={index}>
-        {line}
-        {index < text.split('\n').length - 1 && <br />}
-      </span>
-    ));
-  };
-
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [showLoginModal, setShowLoginModal] = useState(false);
-  const [showProfileDropdown, setShowProfileDropdown] = useState(false);
-
-  const handleLogin = () => {
-    setIsLoggedIn(true);
-    setShowLoginModal(false);
-  };
-
-  const handleLogout = () => {
-    setIsLoggedIn(false);
-    setShowProfileDropdown(false);
-  };
-
-  const toggleProfileDropdown = () => {
-    setShowProfileDropdown(!showProfileDropdown);
-  };
-
-  // 외부 클릭 시 프로필 드롭다운 닫기
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (showProfileDropdown && !event.target.closest('.user-profile-container')) {
-        setShowProfileDropdown(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [showProfileDropdown]);
-
   return (
     <>
       <header className="header">
@@ -246,8 +202,6 @@ export default function Header() {
               Stock D-TAX
             </Link>
             <nav className="header-nav">
-            <Link href="/" className={`nav-link ${isActive('/') ? 'active' : ''}`}>서비스 소개</Link>
-            <Link href="/dashboard" className={`nav-link ${isActive('/dashboard') ? 'active' : ''}`}>대시보드</Link>
               <Link href="/chart" className={`nav-link ${isActive('/chart') ? 'active' : ''}`}>차트</Link>
               <Link href="/assets" className={`nav-link ${isActive('/assets') ? 'active' : ''}`}>자산</Link>
             </nav>
@@ -262,38 +216,11 @@ export default function Header() {
             </button>
           </div>
           <div className="header-right">
-            <div className="homepage-auth">
-              {!isLoggedIn ? (
-                <button 
-                  className="login-btn"
-                  onClick={() => setShowLoginModal(true)}
-                >
-                  로그인
-                </button>
-              ) : (
-                <div className="user-profile-container">
-                  <div 
-                    className={`user-profile ${showProfileDropdown ? 'active' : ''}`}
-                    onClick={toggleProfileDropdown}
-                  >
-                    <span className="user-avatar">👤</span>
-                    <span className="user-name">이주현님</span>
-                    <span className="dropdown-arrow">{showProfileDropdown ? '▲' : '▼'}</span>
-                  </div>
-                  {showProfileDropdown && (
-                    <div className="profile-dropdown">
-                      <Link href="/assets" className="dropdown-item" onClick={() => setShowProfileDropdown(false)}>
-                        <span className="dropdown-icon">💼</span>
-                        <span>내 자산 보러가기</span>
-                      </Link>
-                      <button className="dropdown-item logout-item" onClick={handleLogout}>
-                        <span className="dropdown-icon">🚪</span>
-                        <span>로그아웃</span>
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
+            <div className="profile">
+              <div className="profile-avatar" style={{background:'#2ee86c'}}>🐦</div>
+              <div>
+                <div className="profile-name">이주현</div>
+              </div>
             </div>
             <button className="header-icon" title="다운로드">&#8681;</button>
             <button className="header-icon" title="도움말">&#10068;</button>
@@ -301,52 +228,6 @@ export default function Header() {
           </div>
         </div>
       </header>
-
-      {/* 로그인 모달 */}
-      {showLoginModal && (
-        <div className="modal-overlay" onClick={() => setShowLoginModal(false)}>
-          <div className="login-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3 className="modal-title">로그인</h3>
-              <button 
-                className="modal-close"
-                onClick={() => setShowLoginModal(false)}
-              >
-                ✕
-              </button>
-            </div>
-            <div className="modal-body">
-              <div className="login-form">
-                <div className="form-group">
-                  <label>이메일</label>
-                  <input type="email" placeholder="이메일을 입력하세요" />
-                </div>
-                <div className="form-group">
-                  <label>비밀번호</label>
-                  <input type="password" placeholder="비밀번호를 입력하세요" />
-                </div>
-                <button className="login-submit-btn" onClick={handleLogin}>
-                  로그인
-                </button>
-                <div className="login-divider">
-                  <span>또는</span>
-                </div>
-                <div className="social-login">
-                  <button className="social-btn kakao">
-                    <span>💬</span> 카카오 로그인
-                  </button>
-                  <button className="social-btn naver">
-                    <span>N</span> 네이버 로그인
-                  </button>
-                  <button className="social-btn google">
-                    <span>G</span> 구글 로그인
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* 챗봇 드롭다운 */}
       {isChatbotOpen && (
@@ -359,8 +240,6 @@ export default function Header() {
             cursor: isDragging ? 'grabbing' : 'default'
           }}
           onMouseDown={handleMouseDown}
-          onDragOver={handleDragOver}
-          onDrop={handleDrop}
         >
           <div className="chatbot-header">
             <div className="chatbot-title">
@@ -377,14 +256,13 @@ export default function Header() {
           <div className="chatbot-messages">
             {chatHistory.map((msg) => (
               <div key={msg.id} className={`chatbot-message ${msg.type}`}>
-                {formatMessage(msg.message)}
-                {msg.image && (
-                  <div className="message-image">
-                    <img src={msg.image} alt="첨부된 이미지" />
-                  </div>
-                )}
+                <div dangerouslySetInnerHTML={{ __html: msg.message.replace(/\n/g, '<br>') }} />
               </div>
             ))}
+            {streamingId && (
+              <div key={streamingId} className="chatbot-message bot" ref={streamingRef}>
+              </div>
+            )}
             {isTyping && (
               <div className="chatbot-message bot typing">
                 <div className="typing-indicator">
@@ -411,35 +289,7 @@ export default function Header() {
             ))}
           </div>
           
-          {/* 이미지 업로드 영역 */}
-          {selectedImage && (
-            <div className="image-preview">
-              <img src={selectedImage} alt="선택된 이미지" />
-              <button className="remove-image" onClick={removeImage}>
-                ✕
-              </button>
-            </div>
-          )}
-          
           <form className="chatbot-input" onSubmit={handleChatSubmit}>
-            <div className="input-actions">
-              <button
-                type="button"
-                className="image-upload-btn"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isTyping}
-                title="이미지 업로드"
-              >
-                📷
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleImageUpload}
-                style={{ display: 'none' }}
-              />
-            </div>
             <input
               type="text"
               placeholder="주식 세금에 대해 궁금한 점을 물어보세요..."
@@ -447,7 +297,7 @@ export default function Header() {
               onChange={(e) => setChatMessage(e.target.value)}
               disabled={isTyping}
             />
-            <button type="submit" disabled={(!chatMessage.trim() && !selectedImage) || isTyping}>
+            <button type="submit" disabled={!chatMessage.trim() || isTyping}>
               ➤
             </button>
           </form>
@@ -455,4 +305,4 @@ export default function Header() {
       )}
     </>
   );
-} 
+}

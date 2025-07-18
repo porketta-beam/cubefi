@@ -186,7 +186,6 @@ dev-debug.log
 
 rag_lab/ref/1_openai.ipynb
 
-<<<<<<< HEAD
 # Chroma DB files
 **/chroma_db/
 **/chroma_db/**
@@ -198,6 +197,3 @@ rag_lab/ref/1_openai.ipynb
 **/.venv/
 # Raw data directories
 **/raw_data/
-=======
-.venv/
->>>>>>> bafe99b3d1d776135fc9cc94564ed2193a1485cc
