@@ -602,7 +602,23 @@ body {
   margin-bottom: 20px;
   color: #fff;
   font-size: 1.5rem;
-  font-weight: 500;
+  font-weight: 700;
+}
+
+.account-chart-section {
+  height: 260px;
+  min-height: unset;
+  padding: 14px 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.account-chart-section .chartjs-render-monitor,
+.account-chart-section canvas {
+  height: 180px !important;
+  max-height: 180px !important;
+  width: 100% !important;
+  aspect-ratio: unset !important;
 }
 
 .chart-container {
@@ -2687,6 +2703,13 @@ body {
   margin-left: auto;
   margin-right: auto;
 }
+
+/* 로딩 스피너 애니메이션 */
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
 .calendar-header {
   display: flex;
   justify-content: space-between;

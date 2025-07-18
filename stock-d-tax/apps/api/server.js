@@ -6,6 +6,7 @@ const socketIo = require('socket.io');
 const { getRealtimePrice } = require('./services/stockApi');
 const taxRoutes = require('./routes/tax');
 const chatbotRoutes = require('./routes/chatbot');
+const dividendRoutes = require('./routes/dividend');
 
 const app = express();
 const server = http.createServer(app);
@@ -27,6 +28,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // 라우트
 app.use('/api/tax', taxRoutes);
 app.use('/api/chatbot', chatbotRoutes);
+app.use('/api/dividend', dividendRoutes);
 
 
 // 기본 라우트
