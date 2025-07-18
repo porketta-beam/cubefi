@@ -77,64 +77,14 @@ export default function Home() {
 
   return (
     <div className="dashboard-container">
-      <h1>Stock D-TAX 대시보드</h1>
-      <div className="dashboard-cards">
-        <div className="dashboard-card">
-          <div className="card-title">국내주식 실현수익</div>
-          <div className={`card-value ${warning ? 'warning' : ''}`}>{realizedProfit.toLocaleString()}원</div>
-          <div className="card-desc">분리과세 한도: 20,000,000원</div>
-        </div>
-        <div className="dashboard-card">
-          <div className="card-title">해외주식 실현수익</div>
-          <div className={`card-value ${foreignWarning ? 'warning' : ''}`}>{foreignProfit.toLocaleString()}원</div>
-          <div className="card-desc">비과세 한도: 2,500,000원</div>
-        </div>
-        <div className="dashboard-card">
-          <div className="card-title">근로소득(연)</div>
-          <div className="card-value">42,000,000원</div>
-          <div className="card-desc">월급(세전): 3,500,000원</div>
-        </div>
-        <div className="dashboard-card">
-          <div className="card-title">투자 목표</div>
-          <div className="card-value">아파트 구매</div>
-          <div className="card-desc">세금 부담 최소화, 실질 수익 극대화</div>
-        </div>
-      </div>
+      <h1>Stock D-TAX 캘린더</h1>
+      
 
       <DividendCalendar />
 
-      <div className="chart-section">
-        <h2>실현수익 추이</h2>
-        <Line data={chartData} options={chartOptions} />
-        <div className="tax-threshold">
-          {warning && (
-            <span style={{color:'#ff6384',fontWeight:'bold'}}>분리과세 임계점 초과! 종합과세 구간 진입</span>
-          )}
-          {!warning && (
-            <span>분리과세 임계점: 20,000,000원</span>
-          )}
-        </div>
-        {foreignWarning && (
-          <div className="tax-threshold" style={{color:'#ffce56',marginTop:8}}>
-            해외주식 비과세 한도 초과! 20% 세율 적용
-          </div>
-        )}
-      </div>
+      
 
-      <div className="dashboard-alerts">
-        {warning && (
-          <div className="alert warning">
-            <b>종합과세 구간 진입!</b> 초과분은 근로소득과 합산해 누진세율(6.6~49.5%)이 적용됩니다.<br/>
-            <span style={{color:'#2ee86c'}}>ISA 계좌 활용, 실현수익 분산 등 절세 전략을 추천드립니다.</span>
-          </div>
-        )}
-        {foreignWarning && (
-          <div className="alert warning">
-            <b>해외주식 실현수익 250만원 초과!</b> 초과분은 20% 세율이 적용됩니다.<br/>
-            <span style={{color:'#2ee86c'}}>손실 종목 매도, 연도별 분산 매도 등 절세 전략을 활용하세요.</span>
-          </div>
-        )}
-      </div>
+      
     </div>
   );
-} 
+}

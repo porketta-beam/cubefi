@@ -146,14 +146,24 @@ export default function DomesticStocks() {
         <button className="action-btn">차트 보기</button>
       </div>
       {showAddForm && (
-        <div className="add-stock-form" style={{marginTop: '18px', background: '#23262f', borderRadius: '12px', padding: '18px', boxShadow: '0 2px 8px rgba(46,232,108,0.07)', display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap'}}>
-          <input placeholder="종목명" value={newStock.name} onChange={e => setNewStock({ ...newStock, name: e.target.value })} style={{padding:'8px', borderRadius:'6px', border:'1px solid #3a3d46', background:'#23262f', color:'#fff', minWidth:'100px'}} />
-          <input placeholder="티커" value={newStock.ticker} onChange={e => setNewStock({ ...newStock, ticker: e.target.value })} style={{padding:'8px', borderRadius:'6px', border:'1px solid #3a3d46', background:'#23262f', color:'#fff', minWidth:'80px'}} />
-          <input placeholder="수량" type="number" value={newStock.quantity} onChange={e => setNewStock({ ...newStock, quantity: e.target.value })} style={{padding:'8px', borderRadius:'6px', border:'1px solid #3a3d46', background:'#23262f', color:'#fff', minWidth:'60px'}} />
-          <input placeholder="평균단가" type="number" value={newStock.avgPrice} onChange={e => setNewStock({ ...newStock, avgPrice: e.target.value })} style={{padding:'8px', borderRadius:'6px', border:'1px solid #3a3d46', background:'#23262f', color:'#fff', minWidth:'80px'}} />
-          <input placeholder="현재가" type="number" value={newStock.currentPrice} onChange={e => setNewStock({ ...newStock, currentPrice: e.target.value })} style={{padding:'8px', borderRadius:'6px', border:'1px solid #3a3d46', background:'#23262f', color:'#fff', minWidth:'80px'}} />
-          <button className="action-btn primary" style={{minWidth:'60px'}} onClick={handleAddStock}>추가</button>
-          <button className="action-btn" style={{minWidth:'60px'}} onClick={() => setShowAddForm(false)}>취소</button>
+        <div className="add-stock-form" style={{
+          marginTop: '18px', 
+          background: '#23262f', 
+          borderRadius: '12px', 
+          padding: '18px', 
+          boxShadow: '0 2px 8px rgba(46,232,108,0.07)', 
+          display: 'grid', 
+          gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))',
+          gap: '10px', 
+          alignItems: 'center'
+        }}>
+          <input placeholder="종목명" value={newStock.name} onChange={e => setNewStock({ ...newStock, name: e.target.value })} style={{padding:'8px', borderRadius:'6px', border:'1px solid #3a3d46', background:'#23262f', color:'#fff', width:'100%'}} />
+          <input placeholder="티커" value={newStock.ticker} onChange={e => setNewStock({ ...newStock, ticker: e.target.value })} style={{padding:'8px', borderRadius:'6px', border:'1px solid #3a3d46', background:'#23262f', color:'#fff', width:'100%'}} />
+          <input placeholder="수량" type="number" value={newStock.quantity} onChange={e => setNewStock({ ...newStock, quantity: e.target.value })} style={{padding:'8px', borderRadius:'6px', border:'1px solid #3a3d46', background:'#23262f', color:'#fff', width:'100%'}} />
+          <input placeholder="평균단가" type="number" value={newStock.avgPrice} onChange={e => setNewStock({ ...newStock, avgPrice: e.target.value })} style={{padding:'8px', borderRadius:'6px', border:'1px solid #3a3d46', background:'#23262f', color:'#fff', width:'100%'}} />
+          <input placeholder="현재가" type="number" value={newStock.currentPrice} onChange={e => setNewStock({ ...newStock, currentPrice: e.target.value })} style={{padding:'8px', borderRadius:'6px', border:'1px solid #3a3d46', background:'#23262f', color:'#fff', width:'100%'}} />
+          <button className="action-btn primary" style={{width:'100%'}} onClick={handleAddStock}>추가</button>
+          <button className="action-btn" style={{width:'100%'}} onClick={() => setShowAddForm(false)}>취소</button>
         </div>
       )}
     </div>

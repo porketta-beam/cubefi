@@ -247,9 +247,9 @@ export default function Header() {
             </Link>
             <nav className="header-nav">
             <Link href="/" className={`nav-link ${isActive('/') ? 'active' : ''}`}>서비스 소개</Link>
-            <Link href="/dashboard" className={`nav-link ${isActive('/dashboard') ? 'active' : ''}`}>대시보드</Link>
-              <Link href="/chart" className={`nav-link ${isActive('/chart') ? 'active' : ''}`}>차트</Link>
-              <Link href="/assets" className={`nav-link ${isActive('/assets') ? 'active' : ''}`}>자산</Link>
+            <Link href="/dashboard" className={`nav-link ${isActive('/dashboard') ? 'active' : ''}`}>배당 캘린더</Link>
+              <Link href="/chart" className={`nav-link ${isActive('/chart') ? 'active' : ''}`}>세금 계산기</Link>
+              <Link href="/assets" className={`nav-link ${isActive('/assets') ? 'active' : ''}`}>내 자산</Link>
             </nav>
           </div>
           <div className="header-chatbot">

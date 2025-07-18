@@ -109,8 +109,13 @@ export default function TaxBotWidget() {
             onKeyPress={handleKeyPress}
             placeholder="메시지를 입력하세요..."
             disabled={isLoading}
+            style={{ flex: 1 }}
           />
-          <button onClick={sendMessage} disabled={isLoading || !inputMessage.trim()}>
+          <button 
+            onClick={sendMessage} 
+            disabled={isLoading || !inputMessage.trim()}
+            style={{ flexShrink: 0 }}
+          >
             전송
           </button>
         </div>

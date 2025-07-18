@@ -11,6 +11,7 @@ import {
 } from 'chart.js';
 import annotationPlugin from 'chartjs-plugin-annotation';
 
+
 ChartJS.register(
   CategoryScale,
   LinearScale,
@@ -100,6 +101,7 @@ const data = {
 
 const options = {
   responsive: true,
+  maintainAspectRatio: false,
   plugins: {
     legend: {
       position: 'top',
@@ -209,10 +211,11 @@ const options = {
 };
 
 export default function PortfolioChart() {
+
   return (
     <div className="chart-section">
       <h2>포트폴리오 실현이익 추이</h2>
-      <div className="chart-container">
+      <div className="chart-container" style={{ height: '400px', position: 'relative' }}>
         <Line data={data} options={options} />
       </div>
       <div className="threshold-info">
@@ -235,6 +238,7 @@ export default function PortfolioChart() {
           <span>임계점 초과 (과세율 25.4%)</span>
         </div>
       </div>
+
     </div>
   );
 } 

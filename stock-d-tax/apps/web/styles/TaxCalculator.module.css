@@ -1,0 +1,1211 @@
+.taxCalculatorContainer {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 40px 20px;
+  min-height: calc(100vh - 60px);
+}
+
+/* 세금 제도 설명 카드 섹션 */
+.infoCardsSection {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+  gap: 24px;
+  margin: 32px 0 48px 0;
+}
+
+.infoCard {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+  backdrop-filter: blur(20px);
+  transition: all 0.3s ease;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.infoCard:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.4);
+  border-color: rgba(46, 232, 108, 0.3);
+}
+
+.infoCardHeader {
+  background: linear-gradient(135deg, rgba(46, 232, 108, 0.15), rgba(54, 162, 235, 0.15));
+  padding: 20px 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.infoCardIcon {
+  font-size: 2rem;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+}
+
+.infoCardTitle {
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin: 0;
+  color: #fff;
+}
+
+.infoCardContent {
+  padding: 24px;
+}
+
+/* infoCard 내부의 차트 래퍼 스타일 조정 */
+.infoCardContent .chartWrapper {
+  margin: 20px 0;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  position: relative;
+  overflow: hidden;
+  height: 200px;
+}
+
+.infoCardContent .chartWrapper::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, 
+    rgba(46, 232, 108, 0.6), 
+    rgba(54, 162, 235, 0.6)
+  );
+}
+
+/* infoCard 내부의 상태 배지와 통계 스타일 조정 */
+.infoCardContent .statusBadge {
+  margin: 20px 0;
+  padding: 16px 20px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 600;
+  font-size: 1rem;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.statusContent {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  position: relative;
+  z-index: 1;
+}
+
+.statusText {
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.statusLimit {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #2ee86c;
+  text-shadow: 0 2px 4px rgba(46, 232, 108, 0.3);
+  letter-spacing: 0.5px;
+}
+
+.infoCardContent .statusBadge::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, 
+    transparent, 
+    rgba(255, 255, 255, 0.1), 
+    transparent
+  );
+  transition: left 0.5s ease;
+}
+
+.infoCardContent .statusBadge:hover::before {
+  left: 100%;
+}
+
+.infoCardContent .statusBadge.safe {
+  background: linear-gradient(135deg, 
+    rgba(46, 232, 108, 0.2), 
+    rgba(46, 232, 108, 0.1)
+  );
+  border: 1px solid rgba(46, 232, 108, 0.3);
+  color: #fff;
+  box-shadow: 0 4px 16px rgba(46, 232, 108, 0.2);
+}
+
+.infoCardContent .statusBadge.danger {
+  background: linear-gradient(135deg, 
+    rgba(255, 99, 132, 0.2), 
+    rgba(255, 99, 132, 0.1)
+  );
+  border: 1px solid rgba(255, 99, 132, 0.3);
+  color: #fff;
+  box-shadow: 0 4px 16px rgba(255, 99, 132, 0.2);
+}
+
+.infoCardContent .statusBadge.danger .statusLimit {
+  color: #ff6384;
+  text-shadow: 0 2px 4px rgba(255, 99, 132, 0.3);
+}
+
+.infoCardContent .chartStats {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 20px 0;
+  padding: 20px 24px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.infoHighlight {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(46, 232, 108, 0.1);
+  border: 1px solid rgba(46, 232, 108, 0.3);
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 20px;
+}
+
+.highlightLabel {
+  font-size: 1rem;
+  color: #b0b8c1;
+  font-weight: 500;
+}
+
+.highlightValue {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #2ee86c;
+  text-shadow: 0 2px 4px rgba(46, 232, 108, 0.3);
+}
+
+.infoDescription {
+  font-size: 1rem;
+  line-height: 1.6;
+  color: #e0e6ed;
+  margin-bottom: 24px;
+}
+
+.infoDescription strong {
+  color: #2ee86c;
+  font-weight: 600;
+}
+
+.taxMethods {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.taxMethod {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 16px;
+  border-left: 4px solid #36a2eb;
+}
+
+.taxMethod:first-child {
+  border-left-color: #2ee86c;
+}
+
+.taxMethod h5 {
+  margin: 0 0 8px 0;
+  font-size: 0.9rem;
+  color: #fff;
+  font-weight: 600;
+}
+
+.taxMethod p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #b0b8c1;
+  line-height: 1.4;
+}
+
+.infoTips {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px 20px;
+  border-left: 4px solid #ffa726;
+}
+
+.infoTips h4 {
+  margin: 0 0 12px 0;
+  font-size: 1rem;
+  color: #ffa726;
+  font-weight: 600;
+}
+
+.infoTips ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.infoTips li {
+  font-size: 0.9rem;
+  color: #d1d9e0;
+  line-height: 1.5;
+  margin-bottom: 8px;
+}
+
+.infoTips li:last-child {
+  margin-bottom: 0;
+}
+
+/* 차트 섹션 새 디자인 */
+.chartsSection {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(600px, 1fr));
+  gap: 32px;
+  margin: 48px 0;
+}
+
+.chartContainer {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  overflow: hidden;
+  backdrop-filter: blur(30px);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  position: relative;
+  min-height: 450px;
+}
+
+.chartContainer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, 
+    transparent, 
+    rgba(46, 232, 108, 0.5) 20%, 
+    rgba(54, 162, 235, 0.5) 80%, 
+    transparent
+  );
+}
+
+.chartContainer:hover {
+  transform: translateY(-8px) scale(1.02);
+  box-shadow: 
+    0 20px 60px rgba(0, 0, 0, 0.4),
+    0 0 40px rgba(46, 232, 108, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  border-color: rgba(46, 232, 108, 0.3);
+}
+
+.chartHeader {
+  background: linear-gradient(135deg, 
+    rgba(46, 232, 108, 0.15), 
+    rgba(54, 162, 235, 0.15)
+  );
+  padding: 24px 28px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  position: relative;
+  overflow: hidden;
+}
+
+.chartHeader::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(45deg, 
+    transparent, 
+    rgba(255, 255, 255, 0.03), 
+    transparent
+  );
+  animation: shimmer 3s infinite;
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%) translateY(-100%); }
+  50% { transform: translateX(0%) translateY(0%); }
+  100% { transform: translateX(100%) translateY(100%); }
+}
+
+.chartIcon {
+  font-size: 2.2rem;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-4px); }
+}
+
+.chartTitle {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0;
+  color: #fff;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  position: relative;
+  z-index: 1;
+}
+
+.statusBadge {
+  margin: 24px 28px 20px 28px;
+  padding: 16px 20px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 600;
+  font-size: 1rem;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.statusBadge::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, 
+    transparent, 
+    rgba(255, 255, 255, 0.1), 
+    transparent
+  );
+  transition: left 0.5s ease;
+}
+
+.statusBadge:hover::before {
+  left: 100%;
+}
+
+.statusBadge.safe {
+  background: linear-gradient(135deg, 
+    rgba(46, 232, 108, 0.2), 
+    rgba(46, 232, 108, 0.1)
+  );
+  border: 1px solid rgba(46, 232, 108, 0.3);
+  color: #fff;
+  box-shadow: 0 4px 16px rgba(46, 232, 108, 0.2);
+}
+
+.statusBadge.danger {
+  background: linear-gradient(135deg, 
+    rgba(255, 99, 132, 0.2), 
+    rgba(255, 99, 132, 0.1)
+  );
+  border: 1px solid rgba(255, 99, 132, 0.3);
+  color: #fff;
+  box-shadow: 0 4px 16px rgba(255, 99, 132, 0.2);
+}
+
+.statusIcon {
+  font-size: 1.2rem;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+}
+
+
+
+.chartStats {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 28px 24px 28px;
+  padding: 20px 24px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.statItem {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: center;
+  flex: 1;
+}
+
+.statLabel {
+  font-size: 0.9rem;
+  color: #b0b8c1;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.statValue {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #36a2eb;
+  text-shadow: 0 2px 4px rgba(54, 162, 235, 0.3);
+  transition: all 0.3s ease;
+}
+
+.statValue.limit {
+  color: #2ee86c;
+  text-shadow: 0 2px 4px rgba(46, 232, 108, 0.3);
+}
+
+.statValue:hover {
+  transform: scale(1.05);
+}
+
+.statDivider {
+  width: 1px;
+  height: 40px;
+  background: linear-gradient(to bottom, 
+    transparent, 
+    rgba(255, 255, 255, 0.2), 
+    transparent
+  );
+  margin: 0 20px;
+}
+
+.chartWrapper {
+  margin: 0 28px 24px 28px;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  position: relative;
+  overflow: hidden;
+  height: 200px;
+}
+
+.chartWrapper::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, 
+    rgba(46, 232, 108, 0.6), 
+    rgba(54, 162, 235, 0.6)
+  );
+}
+
+.chartTip {
+  margin: 0 28px 28px 28px;
+  padding: 16px 20px;
+  background: rgba(255, 152, 0, 0.1);
+  border-radius: 10px;
+  border-left: 4px solid #ffa726;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  transition: all 0.3s ease;
+}
+
+.chartTip:hover {
+  background: rgba(255, 152, 0, 0.15);
+  transform: translateX(4px);
+}
+
+.tipIcon {
+  font-size: 1.1rem;
+  margin-top: 2px;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+}
+
+.tipContent {
+  font-size: 0.9rem;
+  color: #d1d9e0;
+  line-height: 1.5;
+}
+
+.tipContent strong {
+  color: #ffa726;
+  font-weight: 600;
+}
+
+.pageTitle {
+  text-align: center;
+  margin-bottom: 40px;
+  font-size: 2.5rem;
+  font-weight: 700;
+  background: linear-gradient(45deg, #2ee86c, #36a2eb);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.mainLayout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
+  margin-bottom: 32px;
+}
+
+/* 현황 대시보드 */
+.statusDashboard {
+  background: #23262f;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 4px 16px rgba(46, 232, 108, 0.08);
+}
+
+.dashboardTitle {
+  color: #2ee86c;
+  font-size: 1.3rem;
+  font-weight: 700;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.statusCards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.statusCard {
+  background: #2c313a;
+  padding: 20px;
+  border-radius: 12px;
+  text-align: center;
+  border: 2px solid transparent;
+  transition: all 0.3s ease;
+}
+
+.statusCard.warning {
+  border-color: #ff6384;
+  background: rgba(255, 99, 132, 0.05);
+}
+
+.statusCard.safe {
+  border-color: #2ee86c;
+  background: rgba(46, 232, 108, 0.05);
+}
+
+.cardLabel {
+  color: #b0b8c1;
+  font-size: 0.9rem;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.cardValue {
+  font-size: 1.8rem;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.cardValue.safe {
+  color: #2ee86c;
+}
+
+.cardValue.warning {
+  color: #ff6384;
+}
+
+.cardValue.danger {
+  color: #ff4757;
+}
+
+.cardSubtext {
+  color: #888;
+  font-size: 0.8rem;
+}
+
+.alertSection {
+  background: #2a2d36;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.alertItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+
+.alertItem.warning {
+  background: rgba(255, 99, 132, 0.1);
+  border-left: 4px solid #ff6384;
+}
+
+.alertItem.info {
+  background: rgba(46, 232, 108, 0.1);
+  border-left: 4px solid #2ee86c;
+}
+
+.alertIcon {
+  font-size: 1.2rem;
+}
+
+.alertText {
+  color: #fff;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+/* 입력 폼 섹션 */
+.inputSection {
+  background: #23262f;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 4px 16px rgba(46, 232, 108, 0.08);
+}
+
+.sectionTitle {
+  color: #fff;
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tabButtons {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.tabButton {
+  background: #2c313a;
+  border: none;
+  color: #b0b8c1;
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 500;
+}
+
+.tabButton.active {
+  background: #2ee86c;
+  color: #181a20;
+}
+
+.tabButton:hover:not(.active) {
+  background: #3a3d46;
+  color: #fff;
+}
+
+.stockForm {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+  padding: 20px;
+  background: #2c313a;
+  border-radius: 12px;
+}
+
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.formLabel {
+  color: #b0b8c1;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.formInput {
+  background: #23262f;
+  border: 1px solid #3a3d46;
+  border-radius: 8px;
+  color: #fff;
+  padding: 10px 12px;
+  font-size: 0.9rem;
+  transition: border-color 0.2s;
+}
+
+.formInput:focus {
+  outline: none;
+  border-color: #2ee86c;
+}
+
+.formInput::placeholder {
+  color: #6c7684;
+}
+
+.formActions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.addButton {
+  background: #2ee86c;
+  border: none;
+  color: #181a20;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.addButton:hover {
+  background: #25c55a;
+  transform: translateY(-1px);
+}
+
+.clearButton {
+  background: #ff6384;
+  border: none;
+  color: #fff;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.clearButton:hover {
+  background: #e55a75;
+  transform: translateY(-1px);
+}
+
+/* 보유 종목 테이블 */
+.holdingsSection {
+  grid-column: 1 / -1;
+  background: #23262f;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 4px 16px rgba(46, 232, 108, 0.08);
+}
+
+.holdingsTable {
+  width: 100%;
+  background: #2c313a;
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+
+.holdingsTable table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.holdingsTable th {
+  background: #2a2d36;
+  color: #2ee86c;
+  padding: 16px 12px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.holdingsTable td {
+  padding: 16px 12px;
+  border-bottom: 1px solid #23262f;
+  color: #fff;
+  font-size: 0.9rem;
+}
+
+.holdingsTable tr:last-child td {
+  border-bottom: none;
+}
+
+.stockInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.stockName {
+  font-weight: 600;
+  color: #fff;
+}
+
+.stockTicker {
+  font-size: 0.8rem;
+  color: #b0b8c1;
+}
+
+.profitCell {
+  font-weight: 600;
+}
+
+.profitCell.positive {
+  color: #2ee86c;
+}
+
+.profitCell.negative {
+  color: #ff6384;
+}
+
+.taxCell {
+  font-weight: 600;
+}
+
+.taxCell.normal {
+  color: #36a2eb;
+}
+
+.taxCell.high {
+  color: #ff6384;
+}
+
+.actionCell {
+  text-align: center;
+}
+
+.deleteButton {
+  background: #ff6384;
+  border: none;
+  color: #fff;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.deleteButton:hover {
+  background: #e55a75;
+  transform: scale(1.05);
+}
+
+/* 시뮬레이션 결과 */
+.simulationSection {
+  grid-column: 1 / -1;
+  background: #23262f;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 4px 16px rgba(46, 232, 108, 0.08);
+}
+
+.simulationGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+}
+
+.simulationCard {
+  background: #2c313a;
+  padding: 20px;
+  border-radius: 12px;
+  border: 2px solid transparent;
+}
+
+.simulationCard.foreign {
+  border-color: #36a2eb;
+}
+
+.simulationCard.dividend {
+  border-color: #ff6384;
+}
+
+.simulationCardTitle {
+  color: #2ee86c;
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.simulationRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #3a3d46;
+}
+
+.simulationRow:last-child {
+  border-bottom: none;
+  font-weight: 700;
+  color: #2ee86c;
+}
+
+.simulationLabel {
+  color: #b0b8c1;
+  font-size: 0.9rem;
+}
+
+.simulationValue {
+  color: #fff;
+  font-weight: 600;
+}
+
+.simulationValue.warning {
+  color: #ff6384;
+}
+
+.simulationValue.safe {
+  color: #2ee86c;
+}
+
+/* 반응형 디자인 */
+@media (max-width: 1200px) {
+  .mainLayout {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+  
+  .statusCards {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}
+
+@media (max-width: 768px) {
+  .taxCalculatorContainer {
+    padding: 20px 16px;
+  }
+  
+  .pageTitle {
+    font-size: 2rem;
+    margin-bottom: 24px;
+  }
+  
+  .stockForm {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    padding: 16px;
+  }
+  
+  .simulationGrid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  
+  .holdingsTable {
+    overflow-x: auto;
+  }
+  
+  .holdingsTable table {
+    min-width: 700px;
+  }
+  
+  .formActions {
+    justify-content: stretch;
+  }
+  
+  .addButton,
+  .clearButton {
+    flex: 1;
+  }
+}
+
+@media (max-width: 480px) {
+  .tabButtons {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .statusCards {
+    gap: 8px;
+  }
+  
+  .statusCard {
+    padding: 16px;
+  }
+  
+  .cardValue {
+    font-size: 1.5rem;
+  }
+  
+  .holdingsTable th,
+  .holdingsTable td {
+    padding: 12px 8px;
+    font-size: 0.8rem;
+  }
+  
+  /* 설명 카드 반응형 */
+  .infoCardsSection {
+    grid-template-columns: 1fr;
+    gap: 20px;
+    margin: 24px 0 32px 0;
+  }
+  
+  .infoCard {
+    border-radius: 12px;
+  }
+  
+  .infoCardHeader {
+    padding: 16px 20px;
+  }
+  
+  .infoCardTitle {
+    font-size: 1.2rem;
+  }
+  
+  .infoCardContent {
+    padding: 20px;
+  }
+  
+  .infoHighlight {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 16px;
+  }
+  
+  .highlightValue {
+    font-size: 1.1rem;
+  }
+  
+  .taxMethods {
+    grid-template-columns: 1fr;
+  }
+  
+  /* 차트 섹션 반응형 */
+  .chartsSection {
+    grid-template-columns: 1fr;
+    gap: 24px;
+    margin: 32px 0;
+  }
+  
+  .chartContainer {
+    border-radius: 16px;
+    min-height: 380px;
+  }
+  
+  .chartHeader {
+    padding: 20px 24px;
+    gap: 12px;
+  }
+  
+  .chartIcon {
+    font-size: 1.8rem;
+  }
+  
+  .chartTitle {
+    font-size: 1.3rem;
+  }
+  
+  .statusBadge {
+    margin: 20px 24px 16px 24px;
+    padding: 14px 16px;
+    font-size: 0.9rem;
+  }
+  
+  .chartStats {
+    margin: 0 24px 20px 24px;
+    padding: 16px 20px;
+    flex-direction: column;
+    gap: 16px;
+  }
+  
+  .statItem {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .statLabel {
+    font-size: 0.8rem;
+  }
+  
+  .statValue {
+    font-size: 1.2rem;
+  }
+  
+  .statDivider {
+    width: 100%;
+    height: 1px;
+    background: linear-gradient(to right, 
+      transparent, 
+      rgba(255, 255, 255, 0.2), 
+      transparent
+    );
+    margin: 0;
+  }
+  
+  .chartWrapper {
+    margin: 0 24px 20px 24px;
+    padding: 20px 16px;
+    height: 160px;
+  }
+  
+  .chartTip {
+    margin: 0 24px 24px 24px;
+    padding: 14px 16px;
+    flex-direction: column;
+    gap: 8px;
+    text-align: center;
+  }
+  
+  .tipContent {
+    font-size: 0.85rem;
+  }
+  
+  /* infoCard 내부 요소들 반응형 */
+  .infoCardContent .chartWrapper {
+    margin: 16px 0;
+    padding: 16px 12px;
+    height: 160px;
+  }
+  
+  .infoCardContent .statusBadge {
+    margin: 16px 0;
+    padding: 14px 16px;
+    font-size: 0.9rem;
+  }
+  
+  .statusText {
+    font-size: 0.9rem;
+  }
+  
+  .statusLimit {
+    font-size: 1.1rem;
+  }
+  
+  .infoCardContent .chartStats {
+    margin: 16px 0;
+    padding: 16px 20px;
+    flex-direction: column;
+    gap: 16px;
+  }
+  
+  .infoCardContent .chartStats .statItem {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .infoCardContent .chartStats .statDivider {
+    width: 100%;
+    height: 1px;
+    background: linear-gradient(to right, 
+      transparent, 
+      rgba(255, 255, 255, 0.2), 
+      transparent
+    );
+    margin: 0;
+  }
+} 
