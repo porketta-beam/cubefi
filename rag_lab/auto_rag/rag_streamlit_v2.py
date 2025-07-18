@@ -32,6 +32,15 @@ from dotenv import load_dotenv
 load_dotenv(dotenv_path='.env', override=True)
 
 from typing import List, Dict, Any
+from mod import (
+    ChromaDBManager,
+    RawDataSyncManager,
+    RAGSystemManager,
+    QuestionGenerationManager,
+    EvaluationManager,
+    ChatInterfaceManager,
+    VisualizationUtils
+)
 
 # Matplotlib 한글 및 음수 깨짐 방지 설정
 plt.rcParams['axes.unicode_minus'] = False
@@ -43,278 +52,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# ChromaDB 관리 클래스
-class ChromaDBManager:
-    """ChromaDB 관리를 위한 클래스"""
-    
-    def __init__(self, db_path: str = "./chroma_db", embedding_model: str = "text-embedding-3-large"):
-        self.db_path = db_path
-        self.embedding_model = embedding_model
-        self.embeddings = OpenAIEmbeddings(model=embedding_model)
-        self.db = None
-        
-    def check_db_exists(self) -> bool:
-        """DB 존재 여부 확인"""
-        return os.path.exists(self.db_path) and os.path.isdir(self.db_path) and len(os.listdir(self.db_path)) > 0
-    
-    def create_new_db(self, documents: list, force_recreate: bool = False) -> bool:
-        """새로운 ChromaDB 생성"""
-        try:
-            if force_recreate and self.check_db_exists():
-                self.delete_db()
-            
-            self.db = Chroma.from_documents(
-                documents=documents,
-                embedding=self.embeddings,
-                collection_name="rag_collection",
-                persist_directory=self.db_path
-            )
-            
-            return True
-            
-        except Exception as e:
-            st.error(f"DB 생성 실패: {str(e)}")
-            return False
-    
-    def load_existing_db(self) -> bool:
-        """기존 ChromaDB 로드"""
-        try:
-            if not self.check_db_exists():
-                return False
-            
-            self.db = Chroma(
-                persist_directory=self.db_path,
-                embedding_function=self.embeddings,
-                collection_name="rag_collection"
-            )
-            
-            return True
-            
-        except Exception as e:
-            st.error(f"DB 로드 실패: {str(e)}")
-            return False
-    
-    def add_documents(self, documents: list) -> bool:
-        """기존 DB에 문서 추가"""
-        try:
-            if self.db is None:
-                if not self.load_existing_db():
-                    return False
-            
-            self.db.add_documents(documents)
-            return True
-            
-        except Exception as e:
-            st.error(f"문서 추가 실패: {str(e)}")
-            return False
-    
-    def get_document_count(self) -> int:
-        """저장된 문서 개수 반환"""
-        try:
-            if self.db is None:
-                return 0
-            return self.db._collection.count()
-        except:
-            return 0
-    
-    def get_files_in_db(self) -> List[str]:
-        """DB에 저장된 파일명 목록 반환"""
-        try:
-            if self.db is None:
-                return []
-            
-            collection = self.db._collection
-            results = collection.get(include=['metadatas'])
-            
-            files_in_db = set()
-            for metadata in results['metadatas']:
-                if metadata and 'source' in metadata:
-                    source = metadata['source']
-                    filename = os.path.basename(source)
-                    files_in_db.add(filename)
-            
-            return list(files_in_db)
-            
-        except Exception as e:
-            st.error(f"DB 파일 목록 조회 실패: {str(e)}")
-            return []
-    
-    def delete_db(self) -> bool:
-        """ChromaDB 완전 삭제"""
-        try:
-            self.db = None
-            import gc
-            gc.collect()
-            
-            if os.path.exists(self.db_path):
-                shutil.rmtree(self.db_path)
-            
-            return True
-            
-        except Exception as e:
-            st.error(f"DB 삭제 실패: {str(e)}")
-            return False
-    
-    def get_status(self) -> Dict[str, Any]:
-        """DB 상태 정보 반환"""
-        exists = self.check_db_exists()
-        loaded = self.db is not None
-        count = self.get_document_count() if loaded else 0
-        
-        return {
-            'db_exists': exists,
-            'db_loaded': loaded,
-            'document_count': count,
-            'db_path': self.db_path,
-            'embedding_model': self.embedding_model
-        }
-
-# Raw Data 동기화 관리 클래스
-class RawDataSyncManager:
-    """Raw Data 폴더와 ChromaDB 동기화 관리 클래스"""
-    
-    def __init__(self, raw_data_path: str = "./raw_data"):
-        self.raw_data_path = raw_data_path
-        self.supported_extensions = ['.txt', '.pdf']
-        
-        # raw_data 폴더가 없으면 생성
-        if not os.path.exists(self.raw_data_path):
-            os.makedirs(self.raw_data_path)
-    
-    def scan_raw_data_folder(self) -> List[Dict[str, Any]]:
-        """raw_data 폴더의 모든 지원 파일 스캔"""
-        files_info = []
-        
-        try:
-            if not os.path.exists(self.raw_data_path):
-                return files_info
-            
-            for root, dirs, files in os.walk(self.raw_data_path):
-                for file in files:
-                    file_path = os.path.join(root, file)
-                    file_extension = Path(file).suffix.lower()
-                    
-                    if file_extension in self.supported_extensions:
-                        file_stat = os.stat(file_path)
-                        
-                        file_info = {
-                            'filename': file,
-                            'full_path': file_path,
-                            'relative_path': os.path.relpath(file_path, self.raw_data_path),
-                            'extension': file_extension,
-                            'size_bytes': file_stat.st_size,
-                            'size_mb': round(file_stat.st_size / (1024 * 1024), 2),
-                            'modified_time': file_stat.st_mtime,
-                            'modified_date': pd.to_datetime(file_stat.st_mtime, unit='s').strftime('%Y-%m-%d %H:%M:%S')
-                        }
-                        files_info.append(file_info)
-            
-            return files_info
-            
-        except Exception as e:
-            st.error(f"raw_data 폴더 스캔 실패: {str(e)}")
-            return []
-    
-    def compare_with_db(self, db_manager: ChromaDBManager) -> Dict[str, List[str]]:
-        """raw_data 폴더의 파일들과 DB에 저장된 파일들을 비교"""
-        # raw_data 폴더 파일 목록
-        raw_files_info = self.scan_raw_data_folder()
-        raw_files = [info['filename'] for info in raw_files_info]
-        
-        # DB에 저장된 파일 목록
-        db_files = db_manager.get_files_in_db()
-        
-        # 비교 결과
-        sync_status = {
-            'new_files': [],      # DB에 없는 새 파일들
-            'existing_files': [], # DB에 이미 있는 파일들
-            'orphaned_files': [], # raw_data에는 없지만 DB에 있는 파일들
-            'all_raw_files': raw_files,
-            'all_db_files': db_files
-        }
-        
-        # 새 파일과 기존 파일 분류
-        for filename in raw_files:
-            if filename in db_files:
-                sync_status['existing_files'].append(filename)
-            else:
-                sync_status['new_files'].append(filename)
-        
-        # 고아 파일 찾기
-        for filename in db_files:
-            if filename not in raw_files:
-                sync_status['orphaned_files'].append(filename)
-        
-        return sync_status
-    
-    def sync_with_db(self, db_manager: ChromaDBManager, chunk_size: int = 500, chunk_overlap: int = 100) -> bool:
-        """raw_data 폴더의 새 파일들을 DB에 동기화"""
-        try:
-            # 동기화 상태 확인
-            sync_status = self.compare_with_db(db_manager)
-            new_files = sync_status['new_files']
-            
-            if not new_files:
-                st.info("동기화할 새 파일이 없습니다. 모든 파일이 이미 DB에 저장되어 있습니다.")
-                return True
-            
-            # DB가 로드되지 않았다면 로드 시도
-            if db_manager.db is None:
-                if db_manager.check_db_exists():
-                    if not db_manager.load_existing_db():
-                        st.error("기존 DB 로드에 실패했습니다.")
-                        return False
-                else:
-                    st.info("기존 DB가 없습니다. 첫 번째 파일로 새 DB를 생성합니다.")
-            
-            # 각 새 파일 처리
-            total_added_docs = 0
-            text_splitter = RecursiveCharacterTextSplitter(
-                chunk_size=chunk_size,
-                chunk_overlap=chunk_overlap
-            )
-            
-            for filename in new_files:
-                file_path = os.path.join(self.raw_data_path, filename)
-                
-                st.info(f"처리 중: {filename}")
-                
-                # 파일 로드
-                file_extension = Path(file_path).suffix.lower()
-                if file_extension == '.txt':
-                    loader = TextLoader(file_path, encoding='utf-8')
-                elif file_extension == '.pdf':
-                    loader = PyPDFLoader(file_path)
-                else:
-                    st.warning(f"지원하지 않는 파일 형식: {file_extension}")
-                    continue
-                
-                documents = loader.load_and_split(text_splitter)
-                
-                if documents:
-                    # DB가 없으면 첫 번째 파일로 생성, 있으면 추가
-                    if not db_manager.check_db_exists():
-                        success = db_manager.create_new_db(documents)
-                    else:
-                        success = db_manager.add_documents(documents)
-                    
-                    if success:
-                        total_added_docs += len(documents)
-                        st.success(f"{filename}: {len(documents)}개 청크 추가됨")
-                    else:
-                        st.error(f"{filename}: 추가 실패")
-                        return False
-                else:
-                    st.warning(f"{filename}: 파일 로드 실패")
-            
-            st.success(f"동기화 완료! 총 {total_added_docs}개 청크가 추가되었습니다.")
-            return True
-            
-        except Exception as e:
-            st.error(f"동기화 실패: {str(e)}")
-            return False
-
-# 문서 로드 및 분할 함수
+# Document loading and splitting function
 def load_and_split_document(file_path: str, chunk_size: int = 500, chunk_overlap: int = 100) -> list:
     """파일을 로드하고 청크로 분할"""
     try:
@@ -361,6 +99,14 @@ if 'db_manager' not in st.session_state:
     st.session_state.db_manager = ChromaDBManager()
 if 'sync_manager' not in st.session_state:
     st.session_state.sync_manager = RawDataSyncManager()
+if 'rag_manager' not in st.session_state:
+    st.session_state.rag_manager = RAGSystemManager()
+if 'question_manager' not in st.session_state:
+    st.session_state.question_manager = QuestionGenerationManager()
+if 'evaluation_manager' not in st.session_state:
+    st.session_state.evaluation_manager = EvaluationManager()
+if 'chat_interface' not in st.session_state:
+    st.session_state.chat_interface = ChatInterfaceManager()
 
 st.title("🤖 RAG 시스템 및 RAGAS 평가")
 st.markdown("---")
@@ -544,10 +290,6 @@ with tab2:
     if st.session_state.db is None:
         st.warning("먼저 'Raw Data 동기화' 탭에서 문서를 동기화해 주세요.")
     else:
-        # Initialize chat messages
-        if 'chat_messages' not in st.session_state:
-            st.session_state.chat_messages = []
-        
         # RAG Configuration
         st.subheader("RAG 설정")
         
@@ -567,9 +309,17 @@ with tab2:
         with col3:
             search_k = st.slider("검색할 문서 개수", min_value=1, max_value=10, value=3, key="chat_k")
         
+        # RAG 매니저 설정
+        rag_manager = st.session_state.rag_manager
+        rag_manager.set_llm(chat_model, chat_temperature)
+        rag_manager.set_retriever(st.session_state.db, "similarity", {"k": search_k})
+        
+        # 채팅 인터페이스 매니저
+        chat_interface = st.session_state.chat_interface
+        
         # Clear chat button
         if st.button("채팅 기록 초기화"):
-            st.session_state.chat_messages = []
+            chat_interface.clear_messages()
             st.rerun()
         
         # Display chat messages
@@ -579,73 +329,29 @@ with tab2:
         chat_container = st.container()
         
         with chat_container:
-            for i, message in enumerate(st.session_state.chat_messages):
-                if message["role"] == "user":
-                    with st.chat_message("user"):
-                        st.write(message["content"])
-                else:
-                    with st.chat_message("assistant"):
-                        st.write(message["content"])
-                        if "contexts" in message:
-                            with st.expander("참고 문서"):
-                                for j, context in enumerate(message["contexts"]):
-                                    st.write(f"**문서 {j+1}:**")
-                                    st.write(context[:300] + "..." if len(context) > 300 else context)
-                                    st.write("---")
+            chat_interface.display_messages()
         
         # Chat input
         user_question = st.chat_input("질문을 입력하세요...")
         
         if user_question:
             # Add user message to chat
-            st.session_state.chat_messages.append({"role": "user", "content": user_question})
+            chat_interface.add_message("user", user_question)
             
             try:
                 with st.spinner("답변을 생성 중입니다..."):
-                    # Create retriever
-                    retriever = st.session_state.db.as_retriever(
-                        search_type="similarity",
-                        search_kwargs={"k": search_k}
-                    )
-                    
-                    # Create LLM instance
-                    llm = ChatOpenAI(model=chat_model, temperature=chat_temperature)
-                    
-                    # Get relevant contexts
-                    relevant_docs = retriever.invoke(user_question)
-                    contexts = [doc.page_content for doc in relevant_docs]
-                    
-                    # Create prompt
-                    context_text = "\n\n".join(contexts)
-                    prompt_text = f"""다음 문맥을 바탕으로 질문에 답변해 주세요. 문맥에 없는 정보는 추측하지 말고, 문맥 내에서만 답변해 주세요.
-
-문맥:
-{context_text}
-
-질문: {user_question}
-
-답변:"""
-                    
-                    # Get answer
-                    response = llm.invoke(prompt_text)
-                    answer = response.content
+                    # Get answer using RAG manager
+                    answer, contexts = rag_manager.get_answer(user_question)
                     
                     # Add assistant message to chat
-                    st.session_state.chat_messages.append({
-                        "role": "assistant", 
-                        "content": answer,
-                        "contexts": contexts
-                    })
+                    chat_interface.add_message("assistant", answer, contexts)
                     
                     st.rerun()
                     
             except Exception as e:
                 st.error(f"답변 생성 중 오류 발생: {str(e)}")
                 # Add error message to chat
-                st.session_state.chat_messages.append({
-                    "role": "assistant", 
-                    "content": f"죄송합니다. 답변 생성 중 오류가 발생했습니다: {str(e)}"
-                })
+                chat_interface.add_message("assistant", f"죄송합니다. 답변 생성 중 오류가 발생했습니다: {str(e)}")
 
 with tab3:
     st.header("질문 생성하기")
@@ -671,48 +377,25 @@ with tab3:
         # Number of questions
         num_questions = st.slider("생성할 질문 개수", min_value=1, max_value=10, value=5)
         
+        # 질문 생성 매니저 설정
+        question_manager = st.session_state.question_manager
+        question_manager.set_llm(question_model, question_temperature)
+        
         # Generate questions
         if st.button("질문 생성", type="primary"):
             try:
                 with st.spinner("질문을 생성 중입니다..."):
-                    # DB에서 문서 샘플을 가져오기
                     if st.session_state.db is None:
                         st.error("DB가 로드되지 않았습니다. 먼저 동기화를 실행해주세요.")
                     else:
-                        # DB에서 샘플 문서들을 가져오기
-                        collection = st.session_state.db._collection
-                        sample_results = collection.get(limit=min(num_questions * 2, 20), include=['documents'])
+                        # Generate questions using manager
+                        questions = question_manager.generate_questions(st.session_state.db, num_questions)
                         
-                        if not sample_results['documents']:
-                            st.error("DB에 문서가 없습니다. 먼저 동기화를 실행해주세요.")
-                        else:
-                            sample_documents = sample_results['documents']
-                            
-                            # Create LLM instance
-                            llm_for_question = ChatOpenAI(model_name=question_model, temperature=question_temperature)
-                            
-                            # Generate questions
-                            questions = []
-                            
-                            for i in range(num_questions):
-                                # 문서 순환 선택
-                                doc_content = sample_documents[i % len(sample_documents)]
-                                
-                                prompt_text = f"""
-다음 문서를 바탕으로 질문을 1개 생성해 주세요.
-반드시 질문문장만 출력해 주세요. '질문:'이라는 표현 없이 완전한 한국어 질문 형태로만 작성해 주세요.
-
-문서 내용:
-{doc_content[:1000]}...
-"""
-                                question = llm_for_question.invoke(prompt_text).content
-                                questions.append(question)
-                            
-                            # Store generated questions
-                            st.session_state.generated_questions = questions
-                            st.session_state.edited_questions = questions.copy()
-                            
-                            st.success(f"{len(questions)}개의 질문이 생성되었습니다!")
+                        # Store generated questions
+                        st.session_state.generated_questions = questions
+                        st.session_state.edited_questions = questions.copy()
+                        
+                        st.success(f"{len(questions)}개의 질문이 생성되었습니다!")
                     
             except Exception as e:
                 st.error(f"질문 생성 중 오류 발생: {str(e)}")
@@ -741,14 +424,16 @@ with tab3:
             
             with col1:
                 if st.button("질문 추가"):
-                    st.session_state.generated_questions.append("새로운 질문을 입력하세요")
-                    st.session_state.edited_questions.append("새로운 질문을 입력하세요")
+                    question_manager.add_question("새로운 질문을 입력하세요")
+                    st.session_state.generated_questions = question_manager.get_questions()
+                    st.session_state.edited_questions = question_manager.get_questions()
                     st.rerun()
             
             with col2:
                 if st.button("마지막 질문 삭제") and len(st.session_state.generated_questions) > 1:
-                    st.session_state.generated_questions.pop()
-                    st.session_state.edited_questions.pop()
+                    question_manager.remove_question(len(question_manager.get_questions()) - 1)
+                    st.session_state.generated_questions = question_manager.get_questions()
+                    st.session_state.edited_questions = question_manager.get_questions()
                     st.rerun()
             
             # Display final questions
@@ -824,78 +509,35 @@ with tab4:
         for i, question in enumerate(st.session_state.edited_questions):
             st.write(f"{i+1}. {question}")
         
+        # 평가 매니저 설정
+        evaluation_manager = st.session_state.evaluation_manager
+        rag_manager = st.session_state.rag_manager
+        
+        # RAG 매니저 설정
+        rag_manager.set_llm(answer_model, answer_temperature)
+        rag_manager.set_retriever(st.session_state.db, search_type, search_kwargs)
+        
         # Evaluate questions
         if st.button("RAG 평가 실행", type="primary"):
             try:
                 with st.spinner("질문을 평가 중입니다..."):
-                    # Create retriever
-                    retriever = st.session_state.db.as_retriever(
-                        search_type=search_type,
-                        search_kwargs=search_kwargs
-                    )
-                    
-                    # Create LLM instance
-                    llm = ChatOpenAI(model=answer_model, temperature=answer_temperature)
-                    
-                    # Create chain
-                    prompt = ChatPromptTemplate.from_template(
-                        "Answer the following question based on the context: {context}\nQuestion: {input}"
-                    )
-                    chain = create_retrieval_chain(
-                        retriever=retriever,
-                        combine_docs_chain=prompt | llm
-                    )
-                    
-                    # Evaluate with RAGAS
                     st.write("RAGAS로 평가 중...")
                     
-                    evaluation_data = {
-                        "question": [],
-                        "answer": [],
-                        "contexts": []
+                    # 평가 메트릭 설정
+                    metrics_config = {
+                        'use_faithfulness': use_faithfulness,
+                        'use_answer_relevancy': use_answer_relevancy,
+                        'use_context_precision': use_context_precision,
+                        'use_context_recall': use_context_recall
                     }
                     
-                    if use_context_precision or use_context_recall:
-                        evaluation_data["reference"] = []
-                    
-                    # Get answers for each question
-                    for question in st.session_state.edited_questions:
-                        result = chain.invoke({"input": question})
-                        answer = result["answer"].content if hasattr(result["answer"], "content") else str(result["answer"])
-                        contexts = [doc.page_content for doc in result["context"]]
-                        
-                        evaluation_data["question"].append(question)
-                        evaluation_data["answer"].append(answer)
-                        evaluation_data["contexts"].append(contexts)
-                        
-                        if use_context_precision or use_context_recall:
-                            evaluation_data["reference"].append(contexts[0] if contexts else "")
-                    
-                    # Create evaluation dataset
-                    eval_dataset = Dataset.from_dict(evaluation_data)
-                    
-                    # Select metrics
-                    metrics = []
-                    if use_faithfulness:
-                        metrics.append(faithfulness)
-                    if use_answer_relevancy:
-                        metrics.append(answer_relevancy)
-                    if use_context_precision:
-                        metrics.append(context_precision)
-                    if use_context_recall:
-                        metrics.append(context_recall)
-                    
-                    # Evaluate
-                    results = evaluate(eval_dataset, metrics=metrics)
-                    
-                    # Create results dataframe
-                    results_df = pd.DataFrame({
-                        "question": evaluation_data["question"],
-                        "answer": evaluation_data["answer"]
-                    })
-                    
-                    for metric in metrics:
-                        results_df[metric.name] = results[metric.name]
+                    # 평가 실행
+                    results_df = evaluation_manager.evaluate_rag_system(
+                        st.session_state.edited_questions,
+                        st.session_state.db,
+                        rag_manager,
+                        metrics_config
+                    )
                     
                     # Store results
                     st.session_state.evaluation_results = results_df
@@ -915,58 +557,36 @@ with tab4:
             st.dataframe(results_df)
             
             # Calculate and display average scores
-            metric_columns = [col for col in results_df.columns if col not in ["question", "answer"]]
-            if metric_columns:
-                avg_scores = results_df[metric_columns].mean()
-                
+            avg_scores = evaluation_manager.get_average_scores()
+            
+            if avg_scores:
                 st.subheader("평균 점수")
                 col1, col2 = st.columns(2)
                 
+                avg_scores_items = list(avg_scores.items())
                 with col1:
-                    for i, (metric, score) in enumerate(avg_scores.items()):
-                        if i < len(avg_scores) // 2 + len(avg_scores) % 2:
+                    for i, (metric, score) in enumerate(avg_scores_items):
+                        if i < len(avg_scores_items) // 2 + len(avg_scores_items) % 2:
                             st.metric(metric.replace("_", " ").title(), f"{score:.3f}")
                 
                 with col2:
-                    for i, (metric, score) in enumerate(avg_scores.items()):
-                        if i >= len(avg_scores) // 2 + len(avg_scores) % 2:
+                    for i, (metric, score) in enumerate(avg_scores_items):
+                        if i >= len(avg_scores_items) // 2 + len(avg_scores_items) % 2:
                             st.metric(metric.replace("_", " ").title(), f"{score:.3f}")
                 
                 # Visualizations
                 st.subheader("Visualizations")
                 
                 # Bar chart for each metric
+                metric_columns = [col for col in results_df.columns if col not in ["question", "answer"]]
                 for metric in metric_columns:
-                    fig, ax = plt.subplots(figsize=(10, 4))
-                    sns.barplot(x=results_df.index, y=results_df[metric], ax=ax)
-                    ax.set_title(f"질문별 {metric.replace('_', ' ').title()} 점수")
-                    ax.set_xlabel("질문 번호")
-                    ax.set_ylabel("점수")
-                    ax.set_ylim(0, 1)
-                    plt.xticks(rotation=45)
-                    plt.tight_layout()
+                    fig = VisualizationUtils.create_metric_bar_chart(results_df, metric)
                     st.pyplot(fig)
                 
                 # Radar chart for average scores
-                if len(metric_columns) > 2:
-                    fig, ax = plt.subplots(figsize=(6, 6), subplot_kw=dict(polar=True))
-                    
-                    metrics = avg_scores.index.tolist()
-                    scores = avg_scores.values.tolist()
-                    
-                    # Close the plot
-                    scores += scores[:1]
-                    angles = np.linspace(0, 2 * np.pi, len(metrics), endpoint=False).tolist()
-                    angles += angles[:1]
-                    
-                    ax.plot(angles, scores, marker='o')
-                    ax.fill(angles, scores, alpha=0.25)
-                    ax.set_xticks(angles[:-1])
-                    ax.set_xticklabels([m.replace('_', ' ').title() for m in metrics])
-                    ax.set_ylim(0, 1)
-                    ax.set_title("RAGAS 평가 지표 - 평균 점수")
-                    
-                    st.pyplot(fig)
+                radar_fig = VisualizationUtils.create_radar_chart(avg_scores)
+                if radar_fig:
+                    st.pyplot(radar_fig)
             
             # Q&A Display
             st.subheader("질문과 답변")
@@ -975,10 +595,11 @@ with tab4:
                     st.write("**답변:**")
                     st.write(row['answer'])
                     
-                    if metric_columns:
+                    if avg_scores:
                         st.write("**점수:**")
-                        for metric in metric_columns:
-                            st.write(f"- {metric.replace('_', ' ').title()}: {row[metric]:.3f}")
+                        for metric in avg_scores.keys():
+                            if metric in row:
+                                st.write(f"- {metric.replace('_', ' ').title()}: {row[metric]:.3f}")
 
 # Add sidebar information
 st.sidebar.title("ℹ️ 정보")
