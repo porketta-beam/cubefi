@@ -197,3 +197,5 @@ rag_lab/ref/1_openai.ipynb
 **/.venv/
 # Raw data directories
 **/raw_data/
+
+**/.mcp.json

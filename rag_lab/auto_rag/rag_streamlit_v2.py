@@ -39,7 +39,8 @@ from mod import (
     QuestionGenerationManager,
     EvaluationManager,
     ChatInterfaceManager,
-    VisualizationUtils
+    VisualizationUtils,
+    WorkflowStatusManager
 )
 
 # Matplotlib 한글 및 음수 깨짐 방지 설정
@@ -107,6 +108,8 @@ if 'evaluation_manager' not in st.session_state:
     st.session_state.evaluation_manager = EvaluationManager()
 if 'chat_interface' not in st.session_state:
     st.session_state.chat_interface = ChatInterfaceManager()
+if 'workflow_manager' not in st.session_state:
+    st.session_state.workflow_manager = WorkflowStatusManager()
 
 st.title("🤖 RAG 시스템 및 RAGAS 평가")
 st.markdown("---")
@@ -228,7 +231,20 @@ with tab1:
     
     # 동기화 실행
     if st.button("🚀 동기화 실행", type="primary"):
+        # Update workflow status to in_progress
+        workflow_manager = st.session_state.workflow_manager
+        workflow_manager.update_step_status("embedding", "in_progress", 0)
+        
         with st.spinner("동기화를 실행 중입니다..."):
+            # Check sync status first
+            sync_status = sync_manager.compare_with_db(db_manager)
+            new_files_count = len(sync_status['new_files'])
+            
+            workflow_manager.update_step_status("embedding", "in_progress", 25, {
+                "new_files": new_files_count,
+                "document_count": db_manager.get_document_count()
+            })
+            
             success = sync_manager.sync_with_db(
                 db_manager=db_manager,
                 chunk_size=sync_chunk_size,
@@ -238,8 +254,18 @@ with tab1:
             if success:
                 # 세션 상태 업데이트
                 st.session_state.db = db_manager.db
+                final_doc_count = db_manager.get_document_count()
+                
+                # Update workflow status to completed
+                workflow_manager.update_step_status("embedding", "completed", 100, {
+                    "document_count": final_doc_count,
+                    "new_files": new_files_count
+                })
+                
                 st.rerun()
             else:
+                # Update workflow status to error
+                workflow_manager.update_step_status("embedding", "error", 0, error="동기화에 실패했습니다.")
                 st.error("동기화에 실패했습니다.")
     
     # 추가 정보
@@ -384,10 +410,22 @@ with tab3:
         # Generate questions
         if st.button("질문 생성", type="primary"):
             try:
+                # Update workflow status to in_progress
+                workflow_manager = st.session_state.workflow_manager
+                workflow_manager.update_step_status("question_generation", "in_progress", 0)
+                
                 with st.spinner("질문을 생성 중입니다..."):
                     if st.session_state.db is None:
+                        workflow_manager.update_step_status("question_generation", "error", 0, 
+                                                          error="DB가 로드되지 않았습니다. 먼저 동기화를 실행해주세요.")
                         st.error("DB가 로드되지 않았습니다. 먼저 동기화를 실행해주세요.")
                     else:
+                        # Update progress
+                        workflow_manager.update_step_status("question_generation", "in_progress", 25, {
+                            "model_used": question_model,
+                            "target_count": num_questions
+                        })
+                        
                         # Generate questions using manager
                         questions = question_manager.generate_questions(st.session_state.db, num_questions)
                         
@@ -395,9 +433,17 @@ with tab3:
                         st.session_state.generated_questions = questions
                         st.session_state.edited_questions = questions.copy()
                         
+                        # Update workflow status to completed
+                        workflow_manager.update_step_status("question_generation", "completed", 100, {
+                            "question_count": len(questions),
+                            "model_used": question_model
+                        })
+                        
                         st.success(f"{len(questions)}개의 질문이 생성되었습니다!")
                     
             except Exception as e:
+                workflow_manager.update_step_status("question_generation", "error", 0, 
+                                                  error=str(e))
                 st.error(f"질문 생성 중 오류 발생: {str(e)}")
         
         # Display and edit questions
@@ -520,8 +566,18 @@ with tab4:
         # Evaluate questions
         if st.button("RAG 평가 실행", type="primary"):
             try:
+                # Update workflow status to in_progress
+                workflow_manager = st.session_state.workflow_manager
+                workflow_manager.update_step_status("evaluation", "in_progress", 0)
+                
                 with st.spinner("질문을 평가 중입니다..."):
                     st.write("RAGAS로 평가 중...")
+                    
+                    # Update progress
+                    workflow_manager.update_step_status("evaluation", "in_progress", 10, {
+                        "total_questions": len(st.session_state.edited_questions),
+                        "model_used": answer_model
+                    })
                     
                     # 평가 메트릭 설정
                     metrics_config = {
@@ -530,6 +586,9 @@ with tab4:
                         'use_context_precision': use_context_precision,
                         'use_context_recall': use_context_recall
                     }
+                    
+                    # Progress update
+                    workflow_manager.update_step_status("evaluation", "in_progress", 30)
                     
                     # 평가 실행
                     results_df = evaluation_manager.evaluate_rag_system(
@@ -542,9 +601,21 @@ with tab4:
                     # Store results
                     st.session_state.evaluation_results = results_df
                     
+                    # Get average scores for workflow status
+                    avg_scores = evaluation_manager.get_average_scores()
+                    
+                    # Update workflow status to completed
+                    workflow_manager.update_step_status("evaluation", "completed", 100, {
+                        "total_questions": len(st.session_state.edited_questions),
+                        "model_used": answer_model,
+                        "average_scores": avg_scores
+                    })
+                    
                     st.success("평가가 완료되었습니다!")
                     
             except Exception as e:
+                workflow_manager.update_step_status("evaluation", "error", 0, 
+                                                  error=str(e))
                 st.error(f"평가 중 오류 발생: {str(e)}")
         
         # Display results
@@ -601,28 +672,108 @@ with tab4:
                             if metric in row:
                                 st.write(f"- {metric.replace('_', ' ').title()}: {row[metric]:.3f}")
 
-# Add sidebar information
-st.sidebar.title("ℹ️ 정보")
-st.sidebar.markdown("""
-### 사용 방법:
-1. **Raw Data 동기화 탭**: raw_data 폴더와 자동 동기화
-2. **RAG 테스트 탭**: RAG 시스템과 실시간 채팅
-3. **질문 생성하기 탭**: 문서 기반 질문 자동 생성
-4. **RAG 평가하기 탭**: RAGAS로 정량적 평가
+# Workflow Status Sidebar
+def display_workflow_sidebar():
+    """Display workflow status in sidebar"""
+    workflow_manager = st.session_state.workflow_manager
+    
+    st.sidebar.title("🔄 RAG Workflow Status")
+    st.sidebar.markdown("---")
+    
+    # Overall progress
+    overall_progress = workflow_manager.get_overall_progress()
+    st.sidebar.progress(overall_progress / 100)
+    st.sidebar.text(f"Overall Progress: {overall_progress:.1f}%")
+    
+    # Current status
+    workflow_status = workflow_manager.get_workflow_status()
+    status_emoji = {"pending": "⏳", "in_progress": "🔄", "completed": "✅"}.get(workflow_status, "❓")
+    st.sidebar.text(f"Status: {status_emoji} {workflow_status.title()}")
+    
+    st.sidebar.markdown("---")
+    
+    # Individual steps
+    st.sidebar.subheader("📋 Workflow Steps")
+    
+    # Step 1: Document Embedding
+    embedding_info = workflow_manager.get_step_display_info("embedding")
+    with st.sidebar.expander(f"{embedding_info['emoji']} Document Embedding", expanded=True):
+        st.text(f"Status: {embedding_info['status'].title()}")
+        if embedding_info['progress'] > 0:
+            st.progress(embedding_info['progress'] / 100)
+        st.text(f"Updated: {embedding_info['last_updated']}")
+        
+        if embedding_info['details']:
+            if 'document_count' in embedding_info['details']:
+                st.text(f"Documents: {embedding_info['details']['document_count']}")
+            if 'new_files' in embedding_info['details']:
+                st.text(f"New files: {embedding_info['details']['new_files']}")
+        
+        if embedding_info['error']:
+            st.error(f"Error: {embedding_info['error']}")
+    
+    # Step 2: Question Generation
+    question_info = workflow_manager.get_step_display_info("question_generation")
+    with st.sidebar.expander(f"{question_info['emoji']} Question Generation"):
+        st.text(f"Status: {question_info['status'].title()}")
+        if question_info['progress'] > 0:
+            st.progress(question_info['progress'] / 100)
+        st.text(f"Updated: {question_info['last_updated']}")
+        
+        if question_info['details']:
+            if 'question_count' in question_info['details']:
+                st.text(f"Questions: {question_info['details']['question_count']}")
+            if 'model_used' in question_info['details']:
+                st.text(f"Model: {question_info['details']['model_used']}")
+        
+        if question_info['error']:
+            st.error(f"Error: {question_info['error']}")
+    
+    # Step 3: Question Evaluation
+    evaluation_info = workflow_manager.get_step_display_info("evaluation")
+    with st.sidebar.expander(f"{evaluation_info['emoji']} Question Evaluation"):
+        st.text(f"Status: {evaluation_info['status'].title()}")
+        if evaluation_info['progress'] > 0:
+            st.progress(evaluation_info['progress'] / 100)
+        st.text(f"Updated: {evaluation_info['last_updated']}")
+        
+        if evaluation_info['details']:
+            if 'average_scores' in evaluation_info['details']:
+                st.text("Average Scores:")
+                for metric, score in evaluation_info['details']['average_scores'].items():
+                    st.text(f"  {metric}: {score:.3f}")
+        
+        if evaluation_info['error']:
+            st.error(f"Error: {evaluation_info['error']}")
+    
+    st.sidebar.markdown("---")
+    
+    # Quick Actions
+    st.sidebar.subheader("🚀 Quick Actions")
+    
+    # Next step suggestion
+    next_step = workflow_manager.get_next_step()
+    if next_step:
+        step_names = {
+            "embedding": "Document Sync",
+            "question_generation": "Question Generation", 
+            "evaluation": "Evaluation"
+        }
+        st.sidebar.info(f"Next: {step_names.get(next_step, next_step)}")
+    
+    # Reset workflow button
+    if st.sidebar.button("🔄 Reset Workflow"):
+        workflow_manager.reset_workflow()
+        st.rerun()
+    
+    # Workflow completion celebration
+    if workflow_manager.workflow_completed:
+        st.sidebar.success("🎉 Workflow Completed!")
+        completion_time = workflow_manager.completion_time
+        start_time = workflow_manager.start_time
+        if completion_time and start_time:
+            duration = completion_time - start_time
+            st.sidebar.text(f"Duration: {duration:.1f} seconds")
 
-### 동기화 워크플로우:
-1. raw_data 폴더에 .txt/.pdf 파일 추가
-2. '동기화 상태 확인' 버튼으로 새 파일 확인
-3. '동기화 실행' 버튼으로 자동 처리
-4. 중복 파일 방지 및 스마트 동기화
-
-### RAGAS 평가 지표:
-- **정확성(Faithfulness)**: 답변이 사실에 얼마나 부합하는지
-- **답변 관련성(Answer Relevancy)**: 답변이 질문과 얼마나 관련 있는지
-- **문맥 정밀도(Context Precision)**: 검색된 문맥이 얼마나 정밀한지
-- **문맥 재현율(Context Recall)**: 검색된 문맥이 얼마나 완전한지
-
-### 요구 사항:
-- .env 파일에 OpenAI API 키 필요
-- 필수 Python 패키지: streamlit, langchain, ragas 등
-""")
+# Display sidebar
+display_workflow_sidebar()

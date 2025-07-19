@@ -7,6 +7,7 @@ from .question_generation_manager import QuestionGenerationManager
 from .evaluation_manager import EvaluationManager
 from .chat_interface_manager import ChatInterfaceManager
 from .visualization_utils import VisualizationUtils
+from .workflow_status_manager import WorkflowStatusManager
 
 __all__ = [
     'ChromaDBManager',
@@ -15,7 +16,8 @@ __all__ = [
     'QuestionGenerationManager',
     'EvaluationManager',
     'ChatInterfaceManager',
-    'VisualizationUtils'
+    'VisualizationUtils',
+    'WorkflowStatusManager'
 ]
 
 __version__ = "1.0.0"

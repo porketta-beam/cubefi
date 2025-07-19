@@ -3,6 +3,7 @@ uvicorn[standard]
 openai
 python-dotenv
 pydantic
+python-multipart
 streamlit
 langchain
 langchain-community
