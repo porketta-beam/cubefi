@@ -10,12 +10,20 @@ import os
 # Add the current directory to Python path for imports
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
+# OpenTelemetry FastAPI instrumentation
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+
+# LangChain 네이티브 자동 추적 사용
+
 # Import API routers
 from api.routers.documents import router as documents_router
 from api.routers.rag import router as rag_router
 from api.services.rag_config_service import rag_config_service
 
 app = FastAPI(title="RAG Lab API", version="1.0.0")
+
+# FastAPI OpenTelemetry instrumentation
+FastAPIInstrumentor.instrument_app(app, excluded_urls="/health,/docs,/redoc,/openapi.json")
 
 app.add_middleware(
     CORSMiddleware,
@@ -67,7 +75,7 @@ async def websocket_chat(websocket: WebSocket):
                     }))
                     continue
                 
-                # RAG 시스템 스트리밍 호출
+                # RAG 시스템 스트리밍 호출 (LangChain 자동 추적)
                 history = [{"role": "user", "content": user_message}]
                 
                 # 스트리밍 시작 신호

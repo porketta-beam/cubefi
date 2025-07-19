@@ -9,7 +9,7 @@
         "testStrategy": "pytest 에서 /health 호출 → 200 & {\"status\":\"ok\"} 검증\nCI(GitHub Actions) 에 pytest + ruff + mypy 워크플로우 추가",
         "priority": "medium",
         "dependencies": [],
-        "status": "deferred",
+        "status": "done",
         "subtasks": []
       },
       {
@@ -20,7 +20,7 @@
         "testStrategy": "pytest-asyncio 로 세션 생성→ 8회 메시지 삽입 후 길이 6 확인\nTTL 만료 모킹하여 자동 삭제 검증",
         "priority": "medium",
         "dependencies": [],
-        "status": "in-progress",
+        "status": "deferred",
         "subtasks": [
           {
             "id": 1,
@@ -85,8 +85,62 @@
         "testStrategy": "pytest 로 3개 샘플 문서 임베딩 후 vectordb.similarity_search(\"양도소득세\") 결과 top-k>0 확인\nS3 모킹으로 백업 스크립트 exit 0 검증",
         "priority": "medium",
         "dependencies": [],
-        "status": "pending",
-        "subtasks": []
+        "status": "done",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "문서 로더 작성",
+            "description": "세법 문서 크롤링 결과를 불러와 텍스트 데이터로 변환하는 로더를 구현합니다.",
+            "dependencies": [],
+            "details": "• data/tax_docs/*.md 경로의 마크다운 파일을 읽어 리스트 형태로 반환하는 load_documents 함수를 작성합니다.\n• 파일 인코딩, 예외 처리, 텍스트 전처리(불필요한 공백/문자 제거) 등을 포함합니다.",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "OpenAI 임베딩 생성 로직 구현",
+            "description": "불러온 문서 리스트를 OpenAI text-embedding-3-large 모델로 임베딩하는 로직을 구현합니다.",
+            "dependencies": [
+              1
+            ],
+            "details": "• OpenAIEmbeddings(model=\"text-embedding-3-large\", chunk_size=512) 객체를 생성합니다.\n• 문서 리스트를 입력받아 임베딩 벡터 리스트로 변환합니다.\n• 임베딩 실패/오류 케이스에 대한 예외 처리를 추가합니다.",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "Chroma 컬렉션 초기화 및 적재",
+            "description": "Chroma 0.5 PersistentClient를 사용해 컬렉션을 초기화하고 임베딩된 문서를 적재합니다.",
+            "dependencies": [
+              2
+            ],
+            "details": "• chromadb.PersistentClient(path=\".chroma\")로 클라이언트 생성\n• 컬렉션 존재 시 삭제 후 재생성, 없으면 새로 생성\n• add_documents로 문서와 임베딩, 메타데이터를 컬렉션에 추가\n• vectordb.persist()로 영속화 수행",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "영속화 및 S3 백업 스크립트 작성",
+            "description": "Chroma DB의 영속화된 데이터를 AWS S3로 백업하는 스크립트를 작성합니다.",
+            "dependencies": [
+              3
+            ],
+            "details": "• nightly_backup.sh 스크립트에서 aws s3 sync .chroma s3://backup 명령어 작성\n• S3 버킷, IAM 권한, 에러 핸들링, 로그 기록 추가\n• 주기적 실행을 위한 크론탭 등록 방법 문서화",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 5,
+            "title": "샘플 데이터 테스트 및 자동화 파이프라인 설정",
+            "description": "샘플 문서로 임베딩-적재-검색-백업 전체 파이프라인을 테스트하고, 크론/워크플로 자동화 설정을 완료합니다.",
+            "dependencies": [
+              4
+            ],
+            "details": "• pytest로 3개 샘플 문서 임베딩 후 vectordb.similarity_search(\"양도소득세\") 결과 top-k>0 확인\n• S3 모킹으로 백업 스크립트 exit 0 검증\n• 전체 파이프라인을 크론탭 또는 워크플로로 자동화, 실패 시 알림 설정",
+            "status": "done",
+            "testStrategy": ""
+          }
+        ]
       },
       {
         "id": 4,
@@ -96,7 +150,7 @@
         "testStrategy": "로컬 함수 호출로 \"ISA 세금 면제 한도?\" 질의 → chain 반환 dict 에 \"citations\" 리스트 길이>0 검증",
         "priority": "medium",
         "dependencies": [],
-        "status": "pending",
+        "status": "done",
         "subtasks": []
       },
       {
@@ -107,19 +161,73 @@
         "testStrategy": "pytest-asyncio + httpx.AsyncClient 로 /chat 호출 → 이벤트 스트림을 수신, finish==True 포함 검증",
         "priority": "medium",
         "dependencies": [],
-        "status": "pending",
+        "status": "done",
         "subtasks": []
       },
       {
         "id": 6,
         "title": "세금 계산기 Python 모듈 개발",
-        "description": "종합과세, ISA, 연금 시나리오별 세후 수익률을 결정론적으로 계산하는 pydantic 입출력 함수 제공.",
-        "details": "• calculator/models.py\n    class TaxCalcInput(BaseModel): invest:int; horizon:int; product:str\n    class TaxCalcOutput(BaseModel): after_tax_return:Decimal; tax_paid:Decimal\n• calculator/core.py\n    def calc(input:TaxCalcInput)->TaxCalcOutput:\n        ...  # 국세청 세율 테이블 상수화하여 공식 구현\n• LangChain Tool 로 wrap: StructuredTool from langchain.tools",
-        "testStrategy": "pytest 로 국세청 예시 케이스와 일치하는 결과(assert Decimal(\"0.1543\"))\n단위 테스트 커버리지 95% 이상",
-        "priority": "medium",
+        "description": "국세청 세율 표를 기반으로 종합과세·ISA·연금저축 시나리오별 세후 수익률을 결정론적으로 계산하는 엔진을 구현하고, LangChain-Agent가 호출할 수 있도록 RAG 체인에 도구(StructuredTool) 형태로 통합한다.",
+        "status": "deferred",
         "dependencies": [],
-        "status": "pending",
-        "subtasks": []
+        "priority": "medium",
+        "details": "구현 위치 변경 및 모듈 구조 통합\n• api/services/tax_calculator.py\n    – 세율 테이블 상수화(국세청 기준)\n    – calc(input:TaxCalcInput) -> TaxCalcOutput  : 종합과세·ISA·연금저축 로직\n• api/models/tax_models.py\n    – TaxCalcInput(BaseModel): income:int, invest:int, product:str, horizon:int\n    – TaxCalcOutput(BaseModel): after_tax_return:Decimal, saved_tax:Decimal, breakdown:dict[str, Decimal]\n• api/services/tax_tools.py\n    – TaxCalcTool(StructuredTool) : 위 calc 함수 래핑, Agent 호출 인터페이스 제공\n• rag_config_service.py\n    – 기존 RAG 검색 체인 + TaxCalcTool 를 Agent 하나로 통합, 스트리밍 응답 유지\n",
+        "testStrategy": "pytest 단위 테스트: 국세청 공식 예시와 동일한 세액·세후수익률 산출(assert Decimal('0.1543'))\npytest-asyncio 통합 테스트: FastAPI 엔드포인트 → RAG+TaxCalc Agent 호출 시 JSON 스트리밍 응답 검증\ncoverage-xml 기준 95% 이상",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "세금 계산 엔진 개발",
+            "description": "세율 테이블 상수화(국세청 기준) 및 핵심 계산 로직(종합과세, ISA, 연금저축)을 구현한다.",
+            "status": "pending",
+            "dependencies": [],
+            "details": "파일: api/services/tax_calculator.py\n• TAX_BRACKETS 딕셔너리/튜플 리스트로 세율, 누진공제액 정의\n• def calc(input:TaxCalcInput) -> TaxCalcOutput:\n      – 각 상품타입별 과세 방식 분기\n      – horizon<=0, 음수 투자금 등 예외 처리\n      – Decimal 사용해 반올림 오차 방지\n• breakdown 필드에 구간별 세액·세후금액 포함",
+            "testStrategy": "pytest: 경계 구간·음수 입력·0기간 등 10개 이상 케이스"
+          },
+          {
+            "id": 2,
+            "title": "Pydantic 데이터 모델 정의",
+            "description": "입력 모델(소득, 투자금액, 상품타입, 투자기간)과 출력 모델(세후수익률, 절약세액, 세부계산내역)을 정의한다.",
+            "status": "pending",
+            "dependencies": [
+              1
+            ],
+            "details": "파일: api/models/tax_models.py\nclass TaxCalcInput(BaseModel):\n    income:int\n    invest:int\n    product:str  # 'composite'|'isa'|'pension'\n    horizon:int  # 년\nclass TaxCalcOutput(BaseModel):\n    after_tax_return:Decimal\n    saved_tax:Decimal\n    breakdown:dict[str, Decimal]",
+            "testStrategy": "pydantic 모델 유효성 테스트(잘못된 product, 음수 값 ValidationError 확인)"
+          },
+          {
+            "id": 3,
+            "title": "LangChain Tool 통합",
+            "description": "StructuredTool 래퍼 클래스를 구현하여 계산 엔진을 LangChain Agent에서 호출 가능하도록 한다.",
+            "status": "pending",
+            "dependencies": [
+              2
+            ],
+            "details": "파일: api/services/tax_tools.py\nTaxCalcTool = StructuredTool.from_function(\n    name='tax_calculator',\n    description='국세청 기준 세금 계산기',\n    func=calc,\n    args_schema=TaxCalcInput,\n    return_schema=TaxCalcOutput,\n)",
+            "testStrategy": "tool.invoke 샘플 호출 → TaxCalcOutput 검증"
+          },
+          {
+            "id": 4,
+            "title": "RAG Chain에 Agent 통합",
+            "description": "rag_config_service.py를 수정하여 RAG 검색 체인과 TaxCalcTool을 하나의 Agent로 통합하고 스트리밍 응답을 유지한다.",
+            "status": "pending",
+            "dependencies": [
+              3
+            ],
+            "details": "• RunnableWithMessageHistory → AgentExecutor 변경\n• Tools=[TaxCalcTool, retriever_tool] 로 등록\n• StreamingStdOutCallbackHandler 사용해 스트리밍 유지\n• 기존 기능 회귀 테스트 포함",
+            "testStrategy": "pytest-asyncio: 사용자 질문→Agent 스트리밍 응답에 세금 계산 결과 포함 확인"
+          },
+          {
+            "id": 5,
+            "title": "통합 테스트 및 검증",
+            "description": "단위 테스트(계산 정확성)와 통합 테스트(챗봇 응답)를 포함하여 전체 기능을 검증하고 95% 이상 커버리지를 달성한다.",
+            "status": "pending",
+            "dependencies": [
+              4
+            ],
+            "details": "• pytest-cov 설정\n• FastAPI TestClient로 /chat POST → 세금 계산 + RAG 답변 시나리오 검증\n• 국세청 PDF 예제값 대비 오차 ±1원 이내",
+            "testStrategy": "coverage run -m pytest && coverage html → 95% 이상 여부 CI에서 체크"
+          }
+        ]
       },
       {
         "id": 7,
@@ -129,30 +237,73 @@
         "testStrategy": "pytest 로 대화 3턴 입력 후 GET /history 반환 길이 3 확인 및 순서 역순 아님 확인",
         "priority": "medium",
         "dependencies": [],
-        "status": "pending",
+        "status": "deferred",
         "subtasks": []
       },
       {
         "id": 8,
         "title": "/evaluate 엔드포인트 및 RAGAS 배치 스크립트",
-        "description": "POST /evaluate 로 들어온 dataset_id 를 Celery 비동기 작업으로 전달하고 RAGAS 메트릭을 산출한다.",
-        "details": "• poetry add ragas==0.2 celery[redis]\n• tasks/eval.py\n    @celery_app.task\n    def run_ragas(dataset_id):\n        ds = load_dataset(dataset_id)\n        metrics = evaluate(ds,rag_pipeline)\n        store_results(metrics)\n• routes/evaluate.py\n    @router.post(\"/evaluate\")\n    async def evaluate(req:EvalRequest):\n        task_id = run_ragas.delay(req.dataset_id)\n        return {\"task_id\":task_id}\n• GitHub Actions: schedule: \"0 3 * * *\" → poetry run celery -A tasks.eval",
-        "testStrategy": "pytest 로 dataset fixture → run_ragas.s(dataset_id).apply().get() 의 결과에서 fidelity, context_precision 키 존재 확인",
-        "priority": "medium",
+        "description": "이미 구현-완료된 auto_rag/mod/evaluation_manager.py 를 활용해 POST /evaluate 로 들어온 dataset_id 를 Celery 비동기 작업으로 전달하고 RAGAS 메트릭( faithfulness, answer_relevancy, context_precision, context_recall )을 산출‧저장한다.",
+        "status": "done",
         "dependencies": [],
-        "status": "pending",
+        "priority": "medium",
+        "details": "• poetry add ragas==0.2 celery[redis] 은 선행 작업에서 반영 완료\n• auto_rag/mod/evaluation_manager.py\n    class EvaluationManager:\n        @staticmethod\n        def evaluate(dataset_id:str)->dict:  # faithfulness, answer_relevancy, context_precision, context_recall\n            ...  # 구현 완료\n• tasks/eval.py\n    @celery_app.task(name=\"run_ragas\")\n    def run_ragas(dataset_id:str):\n        metrics = EvaluationManager.evaluate(dataset_id)\n        store_results(metrics)  # DB 또는 S3 저장 모듈 재사용\n        return metrics\n• routes/evaluate.py\n    @router.post(\"/evaluate\")\n    async def evaluate(req:EvalRequest):\n        task_id = run_ragas.delay(req.dataset_id)\n        return {\"task_id\": task_id}\n• GitHub Actions 배치 실행 유지: schedule: \"0 3 * * *\" → poetry run celery -A tasks.eval\n",
+        "testStrategy": "pytest 에서 dataset fixture 로 run_ragas.s(dataset_id).apply().get() 호출 후 반환 dict 에 faithfulness, answer_relevancy, context_precision, context_recall 키가 모두 존재하고 float 값임을 확인한다.",
         "subtasks": []
       },
       {
         "id": 9,
         "title": "LangSmith 및 OpenTelemetry 관측성 통합",
-        "description": "모든 LangChain 호출, FastAPI 요청에 대해 분산 추적, 지연시간, 오류율을 LangSmith 대시보드에 기록한다.",
-        "details": "• poetry add langsmith==0.3 opentelemetry-sdk opentelemetry-exporter-otlp\n• settings.py: LANGSMITH_API_KEY env\n• tracing.py\n    from langsmith.wrappers import wrap_chain\n    chain = wrap_chain(chain)\n    FastAPIInstrumentor.instrument_app(app, excluded_urls=\"/health\")",
-        "testStrategy": "pytest → chain.invoke dummy 시 LangSmith run_id 반환 확인\nLocust 로 100 rps 부하 → OTLP collector 에서 trace 수집 100% 샘플링 확인",
-        "priority": "medium",
+        "description": "auto_rag 모듈 전반(RAG 코어, Streamlit, FastAPI 서버)에 LangSmith 및 OpenTelemetry 기반 분산 추적을 적용해 모든 문서 검색·LLM 호출·API 요청의 지연시간과 오류율을 LangSmith 대시보드에서 확인할 수 있도록 한다.",
+        "status": "done",
         "dependencies": [],
-        "status": "pending",
-        "subtasks": []
+        "priority": "medium",
+        "details": "• poetry add langsmith==0.3 opentelemetry-sdk opentelemetry-exporter-otlp\n• auto_rag/mod/langsmith_monitor.py: LangSmith Client, trace 컨텍스트 매니저, get_tracer 헬퍼 구현\n• rag_system_manager.py: get_answer() 내부에서 문서 검색 span, LLM 호출 span 분리\n• FastAPIInstrumentor.instrument_app(app, excluded_urls=\"/health,/docs\")\n• Streamlit·WebSocket 경로에도 langsmith_monitor.trace 사용\n• settings(.env): LANGSMITH_API_KEY, LANGSMITH_PROJECT, OTEL_EXPORTER_OTLP_ENDPOINT 등 환경 변수 정의",
+        "testStrategy": "1) pytest -k \"langsmith\" → get_answer() 호출 시 run_id·parent span 구조 확인\n2) Streamlit 앱에서 실제 질문 입력 후 LangSmith UI에서 트레이스 트리 확인\n3) Locust 100 rps 부하 → OTLP Collector에서 샘플링 100% 및 Span 수 = 요청 수 * 3(get_answer, search, call_llm) 검증\n4) FastAPI WebSocket 채널 /chat 스트리밍 호출 시 Span 누락 없는지 확인",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "LangSmith 기본 설정 및 모니터링 모듈 생성",
+            "description": "auto_rag/mod/langsmith_monitor.py를 생성하여 LangSmith Client 래퍼, trace 컨텍스트 매니저, get_tracer를 구현하고 LANGSMITH_API_KEY 등 환경 변수를 설정한다.",
+            "status": "done",
+            "dependencies": [],
+            "details": "• poetry add langsmith==0.3 opentelemetry-sdk opentelemetry-exporter-otlp\n• .env 및 settings.py에 LANGSMITH_API_KEY, LANGSMITH_PROJECT, OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_SDK_DISABLED=false 추가\n• langsmith_monitor.py\n    from langsmith import Client\n    from opentelemetry import trace\n    _client = Client()\n    def trace_span(name: str):\n        ...  # contextmanager로 Span 시작/종료 및 LangSmith 기록\n• 초깃값으로 trace_span(\"init\") 호출하여 모듈 import 시 LangSmith 연결 확인",
+            "testStrategy": "pytest auto_rag/tests/test_monitor.py → trace_span(\"dummy\") 사용 시 LangSmith run_id 반환 여부 확인"
+          },
+          {
+            "id": 2,
+            "title": "auto_rag RAG 시스템에 LangSmith 추적 적용",
+            "description": "rag_system_manager.py의 get_answer() 메서드에 LangSmith 추적을 추가하고, 문서 검색과 LLM 호출을 별도 Span으로 분리한다.",
+            "status": "done",
+            "dependencies": [
+              1
+            ],
+            "details": "• rag_system_manager.py\n    from auto_rag.mod.langsmith_monitor import trace_span\n    def get_answer(question):\n        with trace_span(\"get_answer\"):\n            with trace_span(\"vector_search\"):\n                docs = vectordb.similarity_search(question)\n            with trace_span(\"call_llm\"):\n                answer = llm.invoke(docs, question)\n            return answer\n• 호출 스택에 tags={\"component\":\"RAG\"} 부여",
+            "testStrategy": "pytest → get_answer('세율은?') 호출 후 LangSmith 대시보드에서 get_answer > vector_search > call_llm 계층 구조 확인"
+          },
+          {
+            "id": 3,
+            "title": "Streamlit 앱에서 LangSmith 통합 테스트",
+            "description": "rag_streamlit_v2.py에서 모니터링된 RAG 시스템을 사용해 실제 질문을 입력하고 LangSmith 대시보드에서 트레이스를 시각적으로 검증한다.",
+            "status": "done",
+            "dependencies": [
+              2
+            ],
+            "details": "• rag_streamlit_v2.py\n    from auto_rag.mod.langsmith_monitor import trace_span\n    with trace_span(\"streamlit_session\"):\n        answer = rag_manager.get_answer(query)\n• st.button(\"LangSmith 열기\") 클릭 시 대시보드 링크 제공",
+            "testStrategy": "streamlit run rag_streamlit_v2.py → '장기보유특별공제' 질문 후 LangSmith에서 streamlit_session 포함 여부 확인"
+          },
+          {
+            "id": 4,
+            "title": "API 서버로 확장 및 FastAPI 인스트루먼트 적용",
+            "description": "api/services/rag_config_service.py, server.py(WebSocket) 등에 LangSmith 추적을 적용하고 FastAPIInstrumentor를 사용해 전체 시스템 성능을 검증한다.",
+            "status": "done",
+            "dependencies": [
+              3
+            ],
+            "details": "• api/services/rag_config_service.py\n    with trace_span(\"rag_api_request\"):\n        answer = rag_manager.get_answer(req.question)\n• server.py\n    FastAPIInstrumentor.instrument_app(app, excluded_urls=\"/health,/docs\")\n    WebSocket 엔드포인트 on_receive 내부에 trace_span(\"ws_message\") 적용\n• Locustfile.py에서 100 rps 부하 시 모든 Span 수집 확인",
+            "testStrategy": "Locust 부하 테스트 결과 → OTLP Collector에서 rag_api_request + vector_search + call_llm span 누락 0건, P95 지연시간 < 400ms"
+          }
+        ]
       },
       {
         "id": 10,
@@ -161,14 +312,19 @@
         "details": "• main.py 에 app = FastAPI(openapi_tags=[...])\n• 각 모델 Config.model_config[\"json_schema_extra\"] 로 example 삽입\n• pytest-cov 및 fastapi-testclient 로 /chat,/history,/evaluate 표준 시나리오 작성\n• README.md 에 coverage badge, docs url 명시",
         "testStrategy": "pytest-cov 90% 기준을 GH Actions에서 강제, schemathesis 로 openapi.yaml fuzz => 0 error 통과",
         "priority": "medium",
-        "dependencies": [],
+        "dependencies": [
+          "2",
+          "6",
+          "7",
+          "9"
+        ],
         "status": "pending",
         "subtasks": []
       }
     ],
     "metadata": {
       "created": "2025-07-15T09:33:41.655Z",
-      "updated": "2025-07-15T10:48:38.063Z",
+      "updated": "2025-07-19T11:04:22.644Z",
       "description": "Tasks for master context"
     }
   }

@@ -29,7 +29,27 @@ from ragas.evaluation import evaluate
 
 # Load environment variables
 from dotenv import load_dotenv
-load_dotenv(dotenv_path='.env', override=True)
+import os
+
+# 프로젝트 루트의 .env 파일 경로 설정
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(current_dir)
+env_path = os.path.join(project_root, '.env')
+
+load_dotenv(dotenv_path=env_path, override=True)
+
+# LangSmith 설정 확인
+print(f"LangSmith API Key loaded: {'Yes' if os.getenv('LANGSMITH_API_KEY') else 'No'}")
+print(f"LangSmith Project: {os.getenv('LANGSMITH_PROJECT', 'Not set')}")
+
+# LangSmith 강제 초기화 (Streamlit 환경에서 필요)
+if os.getenv('LANGSMITH_API_KEY'):
+    from langsmith import Client
+    try:
+        langsmith_client = Client()
+        print(f"LangSmith client initialized successfully")
+    except Exception as e:
+        print(f"LangSmith client initialization failed: {e}")
 
 from typing import List, Dict, Any
 from mod import (
@@ -42,6 +62,7 @@ from mod import (
     VisualizationUtils,
     WorkflowStatusManager
 )
+# LangChain 네이티브 자동 추적 사용
 
 # Matplotlib 한글 및 음수 깨짐 방지 설정
 plt.rcParams['axes.unicode_minus'] = False
@@ -343,10 +364,19 @@ with tab2:
         # 채팅 인터페이스 매니저
         chat_interface = st.session_state.chat_interface
         
-        # Clear chat button
-        if st.button("채팅 기록 초기화"):
-            chat_interface.clear_messages()
-            st.rerun()
+        # Clear chat button and LangSmith dashboard
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if st.button("채팅 기록 초기화"):
+                chat_interface.clear_messages()
+                st.rerun()
+        
+        with col2:
+            # LangSmith dashboard link
+            langsmith_project = os.getenv("LANGSMITH_PROJECT", "rag_lab_project")
+            langsmith_url = f"https://smith.langchain.com/projects/{langsmith_project}"
+            st.markdown(f"[🔍 LangSmith 대시보드 열기]({langsmith_url})", unsafe_allow_html=True)
         
         # Display chat messages
         st.subheader("채팅")
@@ -366,7 +396,7 @@ with tab2:
             
             try:
                 with st.spinner("답변을 생성 중입니다..."):
-                    # Get answer using RAG manager
+                    # Get answer using RAG manager (LangChain 자동 추적)
                     answer, contexts = rag_manager.get_answer(user_question)
                     
                     # Add assistant message to chat

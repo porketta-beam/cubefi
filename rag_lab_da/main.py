@@ -250,5 +250,8 @@ async def get_all_users():
         print(error)
         return {"error": "사용자 목록 조회 중 오류가 발생했습니다."}
 
+# 자동 리로드 켜져있음
+# reload=True 일 때, 코드 수정 때마다 최신 코드로 자동 리로드됨
+# 다만, 여러 개의 uvicorn을 실행할 때는 여러 uvicorn이 실행될 수도 있으니 주의할 것
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

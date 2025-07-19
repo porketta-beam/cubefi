@@ -3,6 +3,7 @@
 from typing import Dict, Any, Optional
 from dataclasses import dataclass
 from auto_rag.mod import ChromaDBManager, RAGSystemManager
+# LangChain 네이티브 자동 추적 사용
 from langchain_core.prompts import ChatPromptTemplate
 from dotenv import load_dotenv
 import os
@@ -91,6 +92,7 @@ class RAGConfigService:
     
     def create_rag_chain_stream(self, history: list):
         """Create RAG chain for streaming responses"""
+        # LangChain 자동 추적 사용
         from langchain_core.prompts import ChatPromptTemplate
         
         # Check if RAG system is ready
@@ -138,7 +140,7 @@ class RAGConfigService:
         if not current_question.strip():
             raise Exception("❌ Empty question received. Please provide a valid question.")
         
-        # Retrieve relevant documents
+        # Retrieve relevant documents (LangChain 자동 추적)
         try:
             docs = retriever.get_relevant_documents(current_question)
             if not docs:
@@ -154,10 +156,10 @@ class RAGConfigService:
             else:
                 raise Exception(f"❌ Error retrieving relevant documents: {str(e)}")
         
-        # Create chain
+        # Create chain (LangChain 자동 추적)
         chain = prompt | llm
         
-        # Return streaming generator
+        # Return streaming generator (LangChain 자동 추적)
         return chain.stream({
             "input": current_question,
             "history": history,
