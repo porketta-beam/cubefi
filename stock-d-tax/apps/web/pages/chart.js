@@ -64,7 +64,8 @@ export default function ChartPage() {
 
   // 경고 상태
   const [alerts, setAlerts] = useState([]);
-  const [showStrategyModal, setShowStrategyModal] = useState(false); // 모달 상태 추가
+  // 모달 상태: { type: 'transfer' | 'dividend' } | false
+  const [showStrategyModal, setShowStrategyModal] = useState(false);
 
   // 계산 함수
   const calculateTaxes = () => {
@@ -479,8 +480,8 @@ export default function ChartPage() {
               </p>
               
               <div className={styles.strategyButtonWrapper}>
-                <button className={styles.strategyButton} onClick={() => setShowStrategyModal(true)}>
-                  절세 전략 확인하기
+                <button className={styles.strategyButton} onClick={() => setShowStrategyModal({ type: 'transfer' })}>
+                  양도소득세 절약 팁💡
                 </button>
               </div>
             </div>
@@ -547,8 +548,8 @@ export default function ChartPage() {
               </div>
             
               <div className={styles.strategyButtonWrapper}>
-                <button className={styles.strategyButton} onClick={() => setShowStrategyModal(true)}>
-                  절세 전략 확인하기
+                <button className={styles.strategyButton} onClick={() => setShowStrategyModal({ type: 'dividend' })}>
+                  배당소득세 절약 팁💡
                 </button>
               </div>
             </div>
@@ -905,9 +906,11 @@ export default function ChartPage() {
           <div style={{
             background: '#23262f',
             borderRadius: 12,
-            padding: '40px 32px',
-            minWidth: 320,
-            maxWidth: '90vw',
+            padding: '80px 64px',
+            minWidth: 1040,
+            maxWidth: '1400px',
+            minHeight: 480,
+            maxHeight: '90vh',
             color: '#fff',
             textAlign: 'center',
             position: 'relative',
@@ -915,8 +918,68 @@ export default function ChartPage() {
           }}
             onClick={e => e.stopPropagation()}
           >
-            <h2 style={{color:'#2ee86c', marginBottom: '18px'}}>절세 전략</h2>
-            <div style={{marginBottom: '32px'}}>여기에 절세 전략 내용 작성하기!</div>
+            <h2 style={{color:'#2ee86c', marginBottom: '18px'}}>해외주식 양도소득세 절약 팁💡</h2>
+            <div className={styles.chartWrapper} style={{marginBottom: '32px'}}>
+              {showStrategyModal.type === 'dividend' ? (
+                <Bar data={dividendBarData} options={dividendBarOptions} />
+              ) : (
+                <Bar data={transferBarData} options={transferBarOptions} />
+              )}
+            </div>
+            {showStrategyModal.type === 'transfer' && (
+              <div style={{ margin: '24px 0', color: '#e0e6ed', fontSize: '1.25rem', lineHeight: 1.7, textAlign: 'center', maxWidth: 600, marginLeft: 'auto', marginRight: 'auto' }}>
+                 <div style={{ background: 'rgba(255, 255, 255, 0.05)', borderRadius: '12px', padding: '24px', marginBottom: '16px', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                    <b style={{color: '#2ee86c', fontSize: '1.3rem'}}>1. A·B 종목, 함께 매도하면 세금이 줄어요!</b><br />
+                    A 종목에서 이익이 나고, B 종목에서 손실이 났다면<br />
+                    두 종목을 같은 해에 함께 팔면 손익이 합산되어<br />
+                    과세 대상 금액이 줄어들 수 있어요.<br />
+                 </div>
+
+                 <div style={{ background: 'rgba(255, 255, 255, 0.05)', borderRadius: '12px', padding: '24px', marginBottom: '16px', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                    <b style={{color: '#2ee86c', fontSize: '1.3rem'}}>2. 다음 투자는 국내 상장 ETF로!</b><br />
+                    주식형 ETF는 사고팔아도 매매차익에 세금이 없고,<br />
+                    별도 신고도 필요하지 않아 훨씬 간편합니다.<br />
+                    해외 기업에 투자하면서도 세금 걱정 없이 시작할 수 있죠.<br />
+                 </div>
+                   
+                 <div style={{ background: 'rgba(255, 255, 255, 0.05)', borderRadius: '12px', padding: '24px', marginBottom: '16px', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                    <b style={{color: '#2ee86c', fontSize: '1.3rem'}}>3. 추천 ETF 종목</b><br />
+                    A·B 종목과 유사한 투자 대상은<br />
+                    TIGER 미국S&P500, KODEX 미국나스닥100 등이 있습니다.<br />
+                 </div>
+                 
+                 <div style={{ background: 'rgba(46, 232, 108, 0.1)', borderRadius: '12px', padding: '16px', marginTop: '24px', border: '1px solid rgba(46, 232, 108, 0.3)' }}>
+                    <span style={{ color: '#2ee86c', fontWeight: 'bold' }}>※ 구체적인 절세 방법은 챗봇에 문의해보세요!</span>
+                 </div>
+               </div>
+            )}
+            {showStrategyModal.type === 'dividend' && (
+              <div style={{ margin: '24px 0', color: '#e0e6ed', fontSize: '1.25rem', lineHeight: 1.7, textAlign: 'center', maxWidth: 600, marginLeft: 'auto', marginRight: 'auto' }}>
+                 <div style={{ background: 'rgba(255, 255, 255, 0.05)', borderRadius: '12px', padding: '24px', marginBottom: '16px', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                    <b style={{color: '#2ee86c', fontSize: '1.3rem'}}>1. 배당수익을 2,000만원 이하로 맞추세요!</b><br />
+                    배당수익이 2,000만원을 초과하면 종합과세 대상이 되어<br />
+                    다른 소득과 합산하여 최대 45% 세율이 적용됩니다.<br />
+                    분리과세(15.4%)를 유지하는 것이 훨씬 유리해요.<br />
+                 </div>
+
+                 <div style={{ background: 'rgba(255, 255, 255, 0.05)', borderRadius: '12px', padding: '24px', marginBottom: '16px', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                    <b style={{color: '#2ee86c', fontSize: '1.3rem'}}>2. 배당 수령 시점을 조절하세요!</b><br />
+                    배당금을 받는 시점을 조절하여 연간 배당수익을<br />
+                    2,000만원 이하로 맞출 수 있습니다.<br />
+                    배당 수령을 다음 해로 미루는 것도 좋은 방법이에요.<br />
+                 </div>
+                   
+                 <div style={{ background: 'rgba(255, 255, 255, 0.05)', borderRadius: '12px', padding: '24px', marginBottom: '16px', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                    <b style={{color: '#2ee86c', fontSize: '1.3rem'}}>3. 배당주 대신 성장주로 전환!</b><br />
+                    배당수익 대신 주가 상승을 통한 수익을 추구하면<br />
+                    양도소득세로 과세되어 더 유리할 수 있습니다.<br />
+                 </div>
+                 
+                 <div style={{ background: 'rgba(46, 232, 108, 0.1)', borderRadius: '12px', padding: '16px', marginTop: '24px', border: '1px solid rgba(46, 232, 108, 0.3)' }}>
+                    <span style={{ color: '#2ee86c', fontWeight: 'bold' }}>※ 구체적인 절세 방법은 챗봇에 문의해보세요!</span>
+                 </div>
+               </div>
+            )}
             <button style={{
               background: '#2ee86c',
               color: '#181a20',
