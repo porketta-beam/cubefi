@@ -64,6 +64,7 @@ export default function ChartPage() {
 
   // 경고 상태
   const [alerts, setAlerts] = useState([]);
+  const [showStrategyModal, setShowStrategyModal] = useState(false); // 모달 상태 추가
 
   // 계산 함수
   const calculateTaxes = () => {
@@ -477,14 +478,10 @@ export default function ChartPage() {
                 초과분에 대해 <strong>22% 세율</strong>이 적용됩니다.
               </p>
               
-              {/* 절세 팁 */}
-              <div className={styles.infoTips}>
-                <h4>💡 절세 팁</h4>
-                <ul>
-                  <li>손실 종목을 먼저 매도하여 수익과 상쇄</li>
-                  <li>연도별로 매도 시기를 분산</li>
-                  <li>보유 종목의 평가손익을 정기적으로 모니터링</li>
-                </ul>
+              <div className={styles.strategyButtonWrapper}>
+                <button className={styles.strategyButton} onClick={() => setShowStrategyModal(true)}>
+                  절세 전략 확인하기
+                </button>
               </div>
             </div>
           </div>
@@ -548,15 +545,11 @@ export default function ChartPage() {
                   <p>다른 소득과 합산하여 누진세율 적용 (최대 45%)</p>
                 </div>
               </div>
-              
-              {/* 절세 팁 */}
-              <div className={styles.infoTips}>
-                <h4>💡 절세 팁</h4>
-                <ul>
-                  <li>배당락일 전후 매매 타이밍 조절</li>
-                  <li>가족 분산 투자 고려</li>
-                  <li>연금계좌 내 배당주 투자 활용</li>
-                </ul>
+            
+              <div className={styles.strategyButtonWrapper}>
+                <button className={styles.strategyButton} onClick={() => setShowStrategyModal(true)}>
+                  절세 전략 확인하기
+                </button>
               </div>
             </div>
           </div>
@@ -893,6 +886,55 @@ export default function ChartPage() {
             </div>
           </div>
       </div>
+      {/* 절세 전략 모달 */}
+      {showStrategyModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          background: 'rgba(24,26,32,0.75)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 2000
+        }}
+          onClick={() => setShowStrategyModal(false)}
+        >
+          <div style={{
+            background: '#23262f',
+            borderRadius: 12,
+            padding: '40px 32px',
+            minWidth: 320,
+            maxWidth: '90vw',
+            color: '#fff',
+            textAlign: 'center',
+            position: 'relative',
+            boxShadow: '0 4px 24px rgba(0,0,0,0.18)'
+          }}
+            onClick={e => e.stopPropagation()}
+          >
+            <h2 style={{color:'#2ee86c', marginBottom: '18px'}}>절세 전략</h2>
+            <div style={{marginBottom: '32px'}}>여기에 절세 전략 내용 작성하기!</div>
+            <button style={{
+              background: '#2ee86c',
+              color: '#181a20',
+              border: 'none',
+              borderRadius: 6,
+              padding: '10px 32px',
+              fontSize: '1rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+              transition: 'background 0.18s',
+            }}
+              onClick={() => setShowStrategyModal(false)}
+            >
+              닫기
+            </button>
+          </div>
+        </div>
+      )}
       </div>
     </>
   );

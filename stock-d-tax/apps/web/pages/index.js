@@ -155,9 +155,7 @@ export default function Home() {
               <button className="cta-primary" onClick={() => setShowLoginModal(true)}>
                 <span>🚀</span> 무료로 시작하기
               </button>
-              <button className="cta-secondary">
-                <span>📹</span> 서비스 둘러보기
-              </button>
+              
             </div>
           </div>
           <div className="hero-visual">
@@ -505,7 +503,7 @@ export default function Home() {
             </div>
           </div>
           <div className="footer-bottom">
-            <p>&copy; 2024 Stock D-TAX. All rights reserved.</p>
+            <p>&copy; 2025 Stock D-TAX. All rights reserved.</p>
           </div>
         </div>
       </footer>

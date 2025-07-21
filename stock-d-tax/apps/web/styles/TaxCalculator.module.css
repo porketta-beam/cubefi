@@ -270,6 +270,51 @@
   margin-bottom: 0;
 }
 
+.infoTipsRow {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  margin-top: 8px;
+}
+
+.infoTipsRow ul {
+  flex: 1;
+  margin: 0;
+  padding-right: 0;
+}
+
+.strategyButtonWrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 28px;
+  margin-bottom: 0;
+}
+
+.strategyButton {
+  margin: 0;
+  margin-left: 20px;
+  align-self: flex-start;
+  background: #2ee86c;
+  color: #181a20;
+  font-size: 1rem;
+  font-weight: 700;
+  padding: 10px 22px;
+  border: none;
+  border-radius: 7px;
+  box-shadow: 0 2px 8px rgba(46, 232, 108, 0.08);
+  transition: background 0.2s, transform 0.2s, color 0.2s;
+  outline: none;
+  min-width: 140px;
+}
+.strategyButton:hover {
+  background: #25c55a;
+  color: #181a20;
+  transform: translateY(-2px) scale(1.04);
+}
+
 /* 차트 섹션 새 디자인 */
 .chartsSection {
   display: grid;
@@ -1018,6 +1063,32 @@
   .addButton,
   .clearButton {
     flex: 1;
+  }
+}
+
+@media (max-width: 900px) {
+  .infoTipsRow {
+    gap: 10px;
+  }
+  .strategyButton {
+    min-width: 110px;
+    font-size: 0.95rem;
+    padding: 9px 12px;
+  }
+}
+
+@media (max-width: 600px) {
+  .infoTipsRow {
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 6px;
+  }
+  .strategyButton {
+    margin-left: 0;
+    margin-top: 10px;
+    width: 100%;
+    min-width: 0;
+    font-size: 1rem;
   }
 }
 

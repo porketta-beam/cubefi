@@ -584,7 +584,7 @@ body {
   margin-bottom: 40px;
   font-size: 2.5rem;
   font-weight: 700;
-  background: linear-gradient(45deg, #ff6384, #36a2eb);
+  background: linear-gradient(45deg, #2ee86c, #36a2eb);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -3147,8 +3147,8 @@ body {
 
 .comparison-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 28px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 24px;
   position: relative;
   z-index: 1;
 }
@@ -3337,7 +3337,8 @@ body {
   }
   
   .comparison-grid {
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
   }
   
   .comparison-card.recommended {
@@ -3346,6 +3347,13 @@ body {
   
   .comparison-card.recommended:hover {
     transform: translateY(-8px) scale(1.02);
+  }
+}
+
+@media (max-width: 700px) {
+  .comparison-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
   }
 }
 
@@ -3388,7 +3396,7 @@ body {
   }
   
   .comparison-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(4, 1fr);
     gap: 20px;
   }
   
@@ -4648,7 +4656,7 @@ body {
   .features-grid,
   .target-grid,
   .comparison-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(4, 1fr);
   }
   
   .tax-saving-cards {
@@ -5474,6 +5482,24 @@ html {
   .floating-chatbot-window {
     width: 340px;
     height: 480px;
+  }
+}
+
+.comparison-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 24px;
+}
+
+@media (max-width: 1200px) {
+  .comparison-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .comparison-grid {
+    grid-template-columns: 1fr;
   }
 }
 

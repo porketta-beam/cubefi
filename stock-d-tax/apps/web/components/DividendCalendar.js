@@ -48,7 +48,7 @@ export default function DividendCalendar() {
   const [currentMonth, setCurrentMonth] = useState(today.getMonth());
   const [currentYear, setCurrentYear] = useState(today.getFullYear());
   const [selectedEvent, setSelectedEvent] = useState(null);
-  const [selectedMarket, setSelectedMarket] = useState('korea'); // 추가: 선택된 시장 상태
+  const [selectedMarket, setSelectedMarket] = useState('us');
   const [usDividends, setUsDividends] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
