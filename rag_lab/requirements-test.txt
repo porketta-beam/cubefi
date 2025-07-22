@@ -1,0 +1,48 @@
+# Test dependencies for RAG Lab project
+
+# Core testing framework
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+pytest-mock>=3.10.0
+
+# Test utilities
+pytest-cov>=4.0.0          # Coverage reporting
+pytest-html>=3.1.0         # HTML test reports
+pytest-xdist>=3.0.0        # Parallel test execution
+pytest-timeout>=2.1.0      # Test timeouts
+pytest-benchmark>=4.0.0    # Performance benchmarking
+pytest-repeat>=0.9.1       # Repeat tests
+pytest-randomly>=3.12.0    # Randomize test order
+
+# HTTP testing
+httpx>=0.24.0              # HTTP client for API testing
+requests>=2.28.0           # Alternative HTTP client
+
+# FastAPI testing
+fastapi[testing]>=0.104.0  # FastAPI with testing dependencies
+
+# Mock and fixtures
+factory-boy>=3.2.0         # Test data factories
+Faker>=18.0.0              # Fake data generation
+responses>=0.23.0          # Mock HTTP responses
+
+# Temporary files and directories
+pytest-tempdir>=2019.10.12
+
+# Database testing
+pytest-postgresql>=4.1.1   # PostgreSQL testing fixtures (if needed)
+
+# Optional: Advanced testing tools
+# pytest-bdd>=6.1.0        # Behavior-driven development
+# pytest-django>=4.5.0     # Django testing (if needed)
+# pytest-flask>=1.2.0      # Flask testing (if needed)
+
+# Development utilities
+pre-commit>=3.0.0          # Git hooks
+black>=23.0.0              # Code formatting
+isort>=5.12.0              # Import sorting
+flake8>=6.0.0              # Linting
+mypy>=1.0.0                # Type checking
+
+# Environment management
+python-dotenv>=1.0.0       # Environment variables

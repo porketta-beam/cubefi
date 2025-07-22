@@ -1,0 +1,442 @@
+# Task ID: 19
+# Title: Elasticsearch BM25 + 벡터 앙상블 검색 기능 구현
+# Status: pending
+# Dependencies: 18, 14
+# Priority: medium
+# Description: RAG 시스템의 검색 성능 향상을 위해 Elasticsearch의 BM25 알고리즘과 벡터 임베딩 검색을 결합한 앙상블 검색 기능을 구현하고 최적화한다.
+# Details:
+## 구현 세부사항
+
+1. **Elasticsearch 설정 및 인덱스 구성**
+   - Elasticsearch 클라이언트 설정 (`rag/search/elasticsearch_client.py`)
+     ```python
+     from elasticsearch import Elasticsearch
+     from config import settings
+     
+     def get_elasticsearch_client():
+         return Elasticsearch(
+             hosts=settings.ELASTICSEARCH_HOSTS,
+             basic_auth=(settings.ELASTICSEARCH_USERNAME, settings.ELASTICSEARCH_PASSWORD),
+             verify_certs=settings.ELASTICSEARCH_VERIFY_CERTS
+         )
+     ```
+   - 하이브리드 검색을 위한 인덱스 매핑 설정
+     ```python
+     def create_hybrid_index(index_name):
+         client = get_elasticsearch_client()
+         mapping = {
+             "mappings": {
+                 "properties": {
+                     "content": {
+                         "type": "text",
+                         "analyzer": "korean"  # 한국어 분석기 사용
+                     },
+                     "vector_embedding": {
+                         "type": "dense_vector",
+                         "dims": 1536,  # OpenAI 임베딩 차원 수
+                         "index": True,
+                         "similarity": "cosine"
+                     },
+                     "metadata": {
+                         "type": "object",
+                         "properties": {
+                             "source": {"type": "keyword"},
+                             "doc_id": {"type": "keyword"},
+                             "chunk_id": {"type": "keyword"}
+                         }
+                     }
+                 }
+             },
+             "settings": {
+                 "analysis": {
+                     "analyzer": {
+                         "korean": {
+                             "type": "nori",
+                             "decompound_mode": "mixed"
+                         }
+                     }
+                 }
+             }
+         }
+         client.indices.create(index=index_name, body=mapping)
+     ```
+
+2. **문서 인덱싱 모듈 (`rag/indexer/elasticsearch_indexer.py`)**
+   - 기존 벡터 DB 인덱싱 로직을 확장하여 Elasticsearch에도 동일 문서 저장
+   - 청크 단위로 텍스트와 벡터 임베딩을 함께 저장
+   ```python
+   async def index_document_to_elasticsearch(chunks, embeddings, doc_id, index_name="tax_documents"):
+       client = get_elasticsearch_client()
+       bulk_data = []
+       
+       for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
+           chunk_id = f"{doc_id}_{i}"
+           doc = {
+               "content": chunk.page_content,
+               "vector_embedding": embedding,
+               "metadata": {
+                   "source": chunk.metadata.get("source", ""),
+                   "doc_id": doc_id,
+                   "chunk_id": chunk_id
+               }
+           }
+           
+           # Bulk 인덱싱을 위한 데이터 준비
+           bulk_data.append({"index": {"_index": index_name, "_id": chunk_id}})
+           bulk_data.append(doc)
+       
+       if bulk_data:
+           response = client.bulk(body=bulk_data, refresh=True)
+           return {"indexed": len(chunks), "errors": response.get("errors", False)}
+   ```
+
+3. **하이브리드 검색 구현 (`rag/search/hybrid_search.py`)**
+   - BM25와 벡터 검색을 결합한 하이브리드 검색 함수
+   ```python
+   async def hybrid_search(query, top_k=5, alpha=0.3):
+       """
+       하이브리드 검색 실행: BM25(키워드) + 벡터 검색 결합
+       alpha: 벡터 검색 가중치 (0~1 사이 값, 0은 BM25만, 1은 벡터 검색만)
+       """
+       client = get_elasticsearch_client()
+       embedding_model = get_embedding_model()
+       query_embedding = await embedding_model.aembed_query(query)
+       
+       # 하이브리드 검색 쿼리 구성
+       search_query = {
+           "size": top_k,
+           "query": {
+               "script_score": {
+                   "query": {
+                       "bool": {
+                           "must": [
+                               {"match": {"content": query}}  # BM25 검색
+                           ]
+                       }
+                   },
+                   "script": {
+                       # BM25 스코어와 벡터 유사도 결합
+                       "source": f"(1-{alpha}) * _score + {alpha} * cosineSimilarity(params.query_vector, 'vector_embedding')",
+                       "params": {
+                           "query_vector": query_embedding
+                       }
+                   }
+               }
+           }
+       }
+       
+       response = client.search(index="tax_documents", body=search_query)
+       
+       # 검색 결과 변환
+       results = []
+       for hit in response["hits"]["hits"]:
+           results.append({
+               "content": hit["_source"]["content"],
+               "metadata": hit["_source"]["metadata"],
+               "score": hit["_score"]
+           })
+       
+       return results
+   ```
+
+4. **검색 파라미터 최적화 모듈 (`rag/search/optimizer.py`)**
+   - 쿼리 유형에 따른 최적 가중치(alpha) 자동 조정
+   ```python
+   def optimize_search_params(query):
+       """쿼리 특성에 따라 최적의 검색 파라미터 결정"""
+       # 전문 용어/법률 용어 비율 계산
+       legal_terms = ["세금", "공제", "소득세", "부가가치세", "원천징수", "세액", "과세", "면세"]
+       term_count = sum(1 for term in legal_terms if term in query)
+       
+       # 쿼리 길이 기반 최적화
+       query_length = len(query)
+       
+       if query_length < 10:  # 짧은 키워드 쿼리
+           return {"alpha": 0.2, "top_k": 7}  # BM25 가중치 높게
+       elif term_count >= 2:  # 전문 용어가 많은 쿼리
+           return {"alpha": 0.3, "top_k": 5}  # 균형적 접근
+       else:  # 일반 자연어 쿼리
+           return {"alpha": 0.7, "top_k": 5}  # 벡터 검색 가중치 높게
+   ```
+
+5. **API 엔드포인트 구현 (`api/rag/search.py`)**
+   - 하이브리드 검색 API 엔드포인트 추가
+   ```python
+   @router.post("/hybrid-search")
+   async def hybrid_search_endpoint(
+       query: str = Body(..., embed=True),
+       top_k: int = Body(5, embed=True),
+       alpha: Optional[float] = Body(None, embed=True)
+   ):
+       """하이브리드 검색 엔드포인트"""
+       # 검색 파라미터 최적화 (alpha가 지정되지 않은 경우)
+       if alpha is None:
+           params = optimize_search_params(query)
+           alpha = params["alpha"]
+           top_k = params.get("top_k", top_k)
+       
+       results = await hybrid_search(query, top_k=top_k, alpha=alpha)
+       return {"results": results, "params": {"alpha": alpha, "top_k": top_k}}
+   ```
+
+6. **성능 모니터링 및 로깅 (`rag/monitoring/search_metrics.py`)**
+   - 검색 성능 지표 수집 및 로깅
+   ```python
+   async def log_search_metrics(query, results, search_type, params, execution_time):
+       """검색 성능 지표 로깅"""
+       metrics = {
+           "timestamp": datetime.now().isoformat(),
+           "query": query,
+           "search_type": search_type,
+           "params": params,
+           "result_count": len(results),
+           "execution_time_ms": execution_time,
+       }
+       
+       # 로그 저장 (파일 또는 DB)
+       async with aiofiles.open("logs/search_metrics.jsonl", "a") as f:
+           await f.write(json.dumps(metrics) + "\n")
+   ```
+
+7. **설정 파일 업데이트 (`config.py`)**
+   - Elasticsearch 관련 설정 추가
+   ```python
+   # Elasticsearch 설정
+   ELASTICSEARCH_HOSTS = os.getenv("ELASTICSEARCH_HOSTS", "http://localhost:9200").split(",")
+   ELASTICSEARCH_USERNAME = os.getenv("ELASTICSEARCH_USERNAME", "")
+   ELASTICSEARCH_PASSWORD = os.getenv("ELASTICSEARCH_PASSWORD", "")
+   ELASTICSEARCH_VERIFY_CERTS = os.getenv("ELASTICSEARCH_VERIFY_CERTS", "false").lower() == "true"
+   ```
+
+8. **기존 RAG 파이프라인과 통합**
+   - `rag/pipeline.py` 수정하여 하이브리드 검색 통합
+   ```python
+   async def retrieve_documents(query, search_type="hybrid", **kwargs):
+       """문서 검색 통합 함수"""
+       if search_type == "hybrid":
+           # 하이브리드 검색 사용
+           params = optimize_search_params(query)
+           alpha = kwargs.get("alpha", params["alpha"])
+           top_k = kwargs.get("top_k", params["top_k"])
+           
+           start_time = time.time()
+           results = await hybrid_search(query, top_k=top_k, alpha=alpha)
+           execution_time = (time.time() - start_time) * 1000
+           
+           # 성능 지표 로깅
+           await log_search_metrics(
+               query, results, "hybrid", 
+               {"alpha": alpha, "top_k": top_k}, 
+               execution_time
+           )
+           
+           return results
+       elif search_type == "vector":
+           # 기존 벡터 검색 사용
+           return await vector_search(query, **kwargs)
+       else:
+           raise ValueError(f"Unsupported search type: {search_type}")
+   ```
+
+# Test Strategy:
+## 테스트 전략
+
+1. **단위 테스트 (pytest)**
+   - Elasticsearch 클라이언트 및 인덱스 생성 테스트
+   ```python
+   def test_elasticsearch_client_connection():
+       client = get_elasticsearch_client()
+       assert client.ping(), "Elasticsearch 연결 실패"
+   
+   def test_create_hybrid_index():
+       test_index = "test_hybrid_index"
+       create_hybrid_index(test_index)
+       client = get_elasticsearch_client()
+       assert client.indices.exists(index=test_index), "인덱스 생성 실패"
+       client.indices.delete(index=test_index)  # 테스트 후 정리
+   ```
+   
+   - 인덱싱 기능 테스트
+   ```python
+   @pytest.mark.asyncio
+   async def test_document_indexing():
+       # 테스트용 문서 청크 및 임베딩 생성
+       chunks = [Document(page_content="테스트 문서 내용", metadata={"source": "test.pdf"})]
+       embeddings = [[0.1] * 1536]  # 테스트용 임베딩
+       
+       result = await index_document_to_elasticsearch(chunks, embeddings, "test_doc", "test_index")
+       assert not result.get("errors"), "인덱싱 중 오류 발생"
+       assert result.get("indexed") == 1, "인덱싱된 문서 수 불일치"
+   ```
+   
+   - 하이브리드 검색 기능 테스트
+   ```python
+   @pytest.mark.asyncio
+   async def test_hybrid_search():
+       # 테스트 데이터 인덱싱
+       await setup_test_data()
+       
+       # 다양한 알파 값으로 검색 테스트
+       for alpha in [0.0, 0.3, 0.7, 1.0]:
+           results = await hybrid_search("소득세 공제", top_k=3, alpha=alpha)
+           assert len(results) <= 3, f"alpha={alpha}일 때 결과 수 초과"
+           assert all("content" in r for r in results), f"alpha={alpha}일 때 결과 형식 오류"
+   ```
+   
+   - 파라미터 최적화 테스트
+   ```python
+   def test_search_param_optimization():
+       # 다양한 쿼리 유형에 대한 최적화 테스트
+       short_query = "세금"
+       legal_query = "소득세 원천징수 공제"
+       long_query = "회사에서 받은 연봉에 대한 세금 계산은 어떻게 하나요?"
+       
+       short_params = optimize_search_params(short_query)
+       legal_params = optimize_search_params(legal_query)
+       long_params = optimize_search_params(long_query)
+       
+       # 쿼리 유형별로 다른 파라미터가 반환되는지 확인
+       assert short_params["alpha"] < long_params["alpha"], "짧은 쿼리와 긴 쿼리의 알파 값 최적화 실패"
+       assert legal_params["top_k"] > 0, "법률 쿼리의 top_k 값 최적화 실패"
+   ```
+
+2. **통합 테스트**
+   - API 엔드포인트 테스트 (FastAPI TestClient 사용)
+   ```python
+   def test_hybrid_search_endpoint():
+       client = TestClient(app)
+       response = client.post("/api/rag/hybrid-search", json={"query": "소득세 공제 방법"})
+       
+       assert response.status_code == 200, "API 응답 오류"
+       data = response.json()
+       assert "results" in data, "결과 필드 누락"
+       assert "params" in data, "파라미터 필드 누락"
+       assert len(data["results"]) > 0, "검색 결과 없음"
+   ```
+   
+   - 파라미터 커스터마이징 테스트
+   ```python
+   def test_hybrid_search_with_custom_params():
+       client = TestClient(app)
+       response = client.post(
+           "/api/rag/hybrid-search", 
+           json={"query": "세금 공제", "top_k": 10, "alpha": 0.8}
+       )
+       
+       assert response.status_code == 200
+       data = response.json()
+       assert data["params"]["alpha"] == 0.8, "커스텀 알파 값이 적용되지 않음"
+       assert data["params"]["top_k"] == 10, "커스텀 top_k 값이 적용되지 않음"
+   ```
+
+3. **성능 테스트**
+   - 검색 속도 및 정확도 벤치마크
+   ```python
+   @pytest.mark.benchmark
+   def test_search_performance():
+       # 테스트 쿼리 세트
+       test_queries = [
+           "소득세 공제 방법",
+           "부가가치세 신고 기한",
+           "사업자 세금 계산",
+           "연말정산 공제 항목"
+       ]
+       
+       # 검색 유형별 성능 측정
+       for search_type in ["hybrid", "vector"]:
+           total_time = 0
+           for query in test_queries:
+               start_time = time.time()
+               if search_type == "hybrid":
+                   results = hybrid_search(query)
+               else:
+                   results = vector_search(query)
+               query_time = time.time() - start_time
+               total_time += query_time
+               
+               # 결과 수 확인
+               assert len(results) > 0, f"{search_type} 검색 결과 없음: {query}"
+           
+           avg_time = total_time / len(test_queries)
+           print(f"{search_type} 검색 평균 시간: {avg_time:.4f}초")
+   ```
+   
+   - 메모리 사용량 모니터링
+   ```python
+   def test_memory_usage():
+       import tracemalloc
+       
+       tracemalloc.start()
+       # 대량의 검색 요청 시뮬레이션
+       for i in range(100):
+           hybrid_search(f"테스트 쿼리 {i % 10}")
+       
+       current, peak = tracemalloc.get_traced_memory()
+       tracemalloc.stop()
+       
+       print(f"현재 메모리 사용량: {current / 10**6:.2f}MB")
+       print(f"최대 메모리 사용량: {peak / 10**6:.2f}MB")
+       
+       # 메모리 사용량 제한 확인
+       assert peak < 500 * 10**6, "메모리 사용량이 500MB를 초과함"
+   ```
+
+4. **A/B 테스트**
+   - 검색 품질 비교 테스트
+   ```python
+   def test_search_quality_comparison():
+       # 테스트 쿼리 및 예상 결과
+       test_cases = [
+           {
+               "query": "소득세 공제 한도",
+               "expected_keywords": ["소득세", "공제", "한도"]
+           },
+           {
+               "query": "부가가치세 신고 방법",
+               "expected_keywords": ["부가가치세", "신고", "방법"]
+           }
+       ]
+       
+       for case in test_cases:
+           # 벡터 검색 결과
+           vector_results = vector_search(case["query"])
+           
+           # 하이브리드 검색 결과
+           hybrid_results = hybrid_search(case["query"])
+           
+           # 키워드 포함 여부 확인
+           vector_match = count_keyword_matches(vector_results, case["expected_keywords"])
+           hybrid_match = count_keyword_matches(hybrid_results, case["expected_keywords"])
+           
+           print(f"쿼리: {case['query']}")
+           print(f"벡터 검색 키워드 매치: {vector_match}")
+           print(f"하이브리드 검색 키워드 매치: {hybrid_match}")
+           
+           # 하이브리드 검색이 더 많은 키워드를 포함해야 함
+           assert hybrid_match >= vector_match, "하이브리드 검색 품질이 벡터 검색보다 낮음"
+   ```
+
+5. **로깅 및 모니터링 테스트**
+   ```python
+   @pytest.mark.asyncio
+   async def test_search_metrics_logging():
+       # 로그 파일 초기화
+       if os.path.exists("logs/search_metrics.jsonl"):
+           os.remove("logs/search_metrics.jsonl")
+       
+       # 검색 실행 및 로깅
+       query = "테스트 쿼리"
+       results = [{"content": "테스트 결과"}]
+       await log_search_metrics(query, results, "hybrid", {"alpha": 0.5}, 100.5)
+       
+       # 로그 파일 확인
+       assert os.path.exists("logs/search_metrics.jsonl"), "로그 파일이 생성되지 않음"
+       
+       # 로그 내용 확인
+       async with aiofiles.open("logs/search_metrics.jsonl", "r") as f:
+           log_content = await f.read()
+           log_data = json.loads(log_content.strip())
+           
+           assert log_data["query"] == query, "로그에 쿼리가 기록되지 않음"
+           assert log_data["execution_time_ms"] == 100.5, "실행 시간이 기록되지 않음"
+   ```

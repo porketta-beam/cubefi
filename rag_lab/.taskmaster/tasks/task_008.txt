@@ -1,0 +1,29 @@
+# Task ID: 8
+# Title: /evaluate 엔드포인트 및 RAGAS 배치 스크립트
+# Status: done
+# Dependencies: None
+# Priority: medium
+# Description: 이미 구현-완료된 auto_rag/mod/evaluation_manager.py 를 활용해 POST /evaluate 로 들어온 dataset_id 를 Celery 비동기 작업으로 전달하고 RAGAS 메트릭( faithfulness, answer_relevancy, context_precision, context_recall )을 산출‧저장한다.
+# Details:
+• poetry add ragas==0.2 celery[redis] 은 선행 작업에서 반영 완료
+• auto_rag/mod/evaluation_manager.py
+    class EvaluationManager:
+        @staticmethod
+        def evaluate(dataset_id:str)->dict:  # faithfulness, answer_relevancy, context_precision, context_recall
+            ...  # 구현 완료
+• tasks/eval.py
+    @celery_app.task(name="run_ragas")
+    def run_ragas(dataset_id:str):
+        metrics = EvaluationManager.evaluate(dataset_id)
+        store_results(metrics)  # DB 또는 S3 저장 모듈 재사용
+        return metrics
+• routes/evaluate.py
+    @router.post("/evaluate")
+    async def evaluate(req:EvalRequest):
+        task_id = run_ragas.delay(req.dataset_id)
+        return {"task_id": task_id}
+• GitHub Actions 배치 실행 유지: schedule: "0 3 * * *" → poetry run celery -A tasks.eval
+
+
+# Test Strategy:
+pytest 에서 dataset fixture 로 run_ragas.s(dataset_id).apply().get() 호출 후 반환 dict 에 faithfulness, answer_relevancy, context_precision, context_recall 키가 모두 존재하고 float 값임을 확인한다.

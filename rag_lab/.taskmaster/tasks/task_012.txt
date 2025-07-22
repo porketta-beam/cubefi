@@ -1,0 +1,429 @@
+# Task ID: 12
+# Title: 문서 관리 API 리팩토링 및 기능 개선
+# Status: done
+# Dependencies: 11
+# Priority: high
+# Description: /api/documents 라우트를 전면 개편하여 문서별 청킹 설정 저장, 업로드·삭제·동기화 로직을 개선하고, 메타데이터·보안·비동기 처리를 강화한다.
+# Details:
+본 리팩토링은 기존 요구사항(청킹 설정·업로드·삭제·동기화) 위에 아래와 같은 아키텍처 개선 사항을 추가 반영한다.
+
+1) 디렉터리/파일 구조 고도화
+   • server/raw_data/{doc_id}/original_file.xxx
+   • server/raw_data/{doc_id}/config.json  (DocumentConfig 모델 직렬화)
+   • server/raw_data/{doc_id}/metadata.json (파일명·MIME·페이지 수 등 저장)
+
+2) Pydantic 기반 DocumentConfig 스키마 도입
+   class DocumentConfig(BaseModel):
+       chunk_size: int = Field(gt=0, le=2000)
+       chunk_overlap: int = Field(ge=0)
+       created_at: datetime
+       updated_at: datetime
+       version: int = 1
+       @validator('chunk_overlap')
+       def overlap_lt_size(cls, v, values):
+           if 'chunk_size' in values and v >= values['chunk_size']:
+               raise ValueError('chunk_overlap must be less than chunk_size')
+           return v
+
+3) 보안 & 유효성 계층 강화
+   • server/modules/utils/security.py → validate_document_path(doc_id, base_path) 구현(정규식, resolve, startswith 검증)
+   • ChunkConfigValidator(MIN/MAX/비율 규칙) 추가, 모든 입력 검증에 활용.
+   • DirectoryTraversalError, ConfigurationError 등 커스텀 예외와 FastAPI Global ExceptionHandler 등록.
+
+4) 서비스 계층 분리
+   • DocumentLifecycleService(create_document, update_config, sync_single_document, sync_all_documents)
+   • DocumentStorageService, DocumentConfigService, ConfigurableIngestionService 등 세분화.
+   • create_document: 파일 저장 + metadata.json + 기본 config 작성 → 트랜잭션 롤백 지원.
+
+5) API 엔드포인트 변경 사항(Async & BackgroundTasks)
+   • POST /api/documents/upload-file      : 파일 Form 업로드, 201 Created {doc_id, status, processing}
+   • POST /api/documents/{doc_id}/config  : DocumentConfigUpdate 모델 수신, 200 OK {status:"updated"}
+   • DELETE /api/documents/{doc_id}       : 보안 검증 후 물리 삭제, 204 No Content
+   • GET   /api/documents/sync            : doc_id 선택/미지정, force 옵션, 대용량은 BackgroundTasks
+
+6) ingest_document 리팩토링
+   • ingest_document(doc_id, force_reindex=False) → config.json을 로드해 청킹 인수로 사용.
+
+7) 마이그레이션 스크립트 확장
+   • scripts/backfill_default_config.py : config.json 없는 문서는 DEFAULT 값으로 생성, metadata.json 없으면 자동 생성.
+
+8) 문서화(OpenAPI tags=["Documents"]) 및 로깅(structlog) 추가.
+
+# Test Strategy:
+1) 단위 테스트 (pytest + pytest-asyncio)
+   a. test_config_endpoint
+      • 정상: POST /documents/{doc_id}/config 로 size=800, overlap=200 → 200 OK & config.json 업데이트, vector invalidation 모의 확인
+      • 오류: size=40(<50) → 422, overlap=900(>=size) → 422, 잘못된 doc_id 형식 → 400
+   b. test_upload_file
+      • PDF 업로드 → 201 Created, 반환 JSON {doc_id, status:"uploaded"}; RAW_DATA_DIR/{doc_id}/original_file.pdf, config.json, metadata.json 존재
+      • 대용량(>LARGE_FILE_THRESHOLD) 업로드 시 processing==True, BackgroundTasks mock 호출 확인
+   c. test_delete_security
+      • DELETE /documents/../../evil → 400 DirectoryTraversalError
+      • DELETE /documents/{valid_doc_id} → 204 & 폴더 미존재 확인
+   d. test_sync_endpoint
+      • GET /documents/sync?doc_id={doc_id} → 200, ingest_document 호출(config 기반) mock 확인
+      • GET /documents/sync?force=true 전체 대상 → BackgroundTasks 로 전체 문서 ingest 호출
+   e. security_validation
+      • validate_document_path 정규식 미일치 → 예외 발생
+      • ChunkConfigValidator 비율 초과(overlap>size*0.5) → ValueError
+
+2) 통합 테스트
+   • docker-compose up services 후 FastAPI TestClient 로 전체 플로우(업로드→config수정→sync→삭제) 검증, 커버리지 90% 이상.
+   • schemathesis run http://localhost:8000/openapi.json -E "^/chat|/history" : 0 error.
+
+3) 회귀 테스트
+   • 기존 /chat, /evaluate 워크플로 실행 → 결과 동일·에러 없음 확인.
+
+4) 보안 테스트
+   • OWASP ZAP baseline 스캔: path traversal, 파일 업로드 취약점 0건.
+
+# Subtasks:
+## 1. Config 엔드포인트 구현 및 유효성 검사 [done]
+### Dependencies: None
+### Description: POST /api/documents/{doc_id}/config 엔드포인트를 DocumentConfig 모델 기반으로 구현하고, doc_id 형식·경로·비즈니스 규칙(MIN/MAX, overlap 비율) 검증 및 vector 재인덱스 무효화를 포함한다.
+### Details:
+• server/modules/document_service.py → update_config 구현
+• DocumentConfigService.save_config() 사용, validate_document_path 및 ChunkConfigValidator 적용
+• 성공 시 200 {status:"updated"}, 실패 시 404/422/400 반환
+• structlog 로깅 및 Global ExceptionHandler 연동
+<info added on 2025-07-20T20:02:24.161Z>
+• services/document_config_service.py 에서 비동기 update_config 구현: 기존 config 백업 → 임시 파일 쓰기 → atomic replace, 실패 시 백업 롤백 후 structlog error 로그 및 ConfigurationError 발생, 성공 시 vector_service.invalidate_document_cache 호출 및 config_updated 로그 기록  
+• validators/chunk_validator.py 추가: MIN(50)/MAX(2000) chunk_size, MAX_OVERLAP_RATIO(0.5) 검증 및 권장 비율 기반 warnings 반환  
+• api/routers/documents.py POST /{doc_id}/config 라우트 구현: Path regex 검증, Body(DocumentConfigUpdate) 수신 → ChunkConfigValidator.validate_config 실행, 오류 시 422(detail:{errors,warnings}), 성공 시 ConfigUpdateResponse(status="updated", version, warnings) 반환  
+• exceptions/document_exceptions.py 정의 및 전역 핸들러 등록: DocumentNotFoundError(404), ConfigurationError(422), DirectoryTraversalError(400)  
+• tests/test_config_endpoint.py 작성: 성공 업데이트, 검증 실패, 잘못된/미존재 doc_id 케이스, vector_service.invalidate_document_cache 호출 여부 검증  
+• 의존성: aiofiles(비동기 I/O), structlog, pydantic, security utils(경로 검증), VectorService  
+• 성능/신뢰성: 원자적 파일 교체 + 백업·롤백, 비동기 I/O, config 버전 관리, 구조화 로깅
+</info added on 2025-07-20T20:02:24.161Z>
+<info added on 2025-07-20T22:11:14.641Z>
+• DocumentConfigService v2 설계  
+  – backend/config/document_config_service.py 로 이동, IConfigRepository 인터페이스 분리(파일·S3·DB 구현체 교체 용이)  
+  – set_config() 내부에서: tmp 파일 작성 → os.replace 로 원자적 교체 → 성공 시 `_history/{doc_id}-{timestamp}.json` 백업 저장 후 semver 패치 버전 부여  
+  – get_latest_config(doc_id, env="default") 호출 시 ENV_OVERRIDES/{env}/{doc_id}.json 우선 → 없으면 기본값 병합(fallback) 후 반환  
+  – update 시 vector_service.invalidate_document_cache(doc_id) 비동기 publish → EventBus("config.updated") 로 브로드캐스트, 수신자는 LRUVectorCache.clear(doc_id) 수행  
+  – __call__ 주입(Depends) 가능하도록 singleton FastAPIDependencyProvider 구현
+
+• FastAPI 라우터 /api/config/documents  
+  – GET /api/config/documents/{doc_id} → Query env, version(optional) 지원, 200 {version, config, warnings[]}  
+  – PUT /api/config/documents/{doc_id} → Body: DocumentConfigUpdate, 헤더 X-User-Id 로 호출 주체 확인, 성공 시 200 {status:"updated", version, warnings}  
+  – 라우터 레이어에서 RBAC: SecurityScopes(["config:write"]) 검사, 권한 없을 경우 403  
+  – Router 모듈: api/routers/document_configs.py, APIRouter(prefix="/api/config/documents", tags=["document-config"])  
+  – async def put_config(): validator.validate(), svc.set_config(), AuditLog.record("CONFIG_UPDATE", user_id, doc_id, version)
+
+• Pydantic 스키마  
+  class DocumentChunkOptions(BaseModel):  
+      chunk_size: conint(ge=100, le=2000) = 512  
+      overlap_ratio: confloat(ge=0, le=0.5) = 0.1  
+  class DocumentConfigModel(BaseModel):  
+      chunk: DocumentChunkOptions  
+      metadata: dict[str, Any] | None = None  
+      model_config = ConfigDict(extra="forbid")
+
+• 보안/검증 메커니즘  
+  – PathTraversalGuard.validate(doc_id, allowed_root) 로 디렉터리 탈출 차단  
+  – validator.validate() 에서 범위 초과 시 ValidationError ▶ 422  
+  – 권한 검사는 fastapi.security.HTTPBearer + RoleVerifier(role_map)  
+  – 감사 로그: structlog.bind(event="audit", action, user, doc_id, version).info("config_update")  
+  – 기본값 fallback: Model.model_validate(default_config | env_override | user_patch, validation_context="merge")
+
+• 트랜잭션/에러 핸들링  
+  – Any I/O 실패 시 BackupRestorer.rollback(tmp_path, backup_path) 호출 후 ConfigurationError  
+  – GlobalExceptionHandler 등록: ConfigurationError→422, PermissionError→403, FileNotFoundError→404
+
+• 캐시 무효화 이벤트 시스템  
+  – infra/events.py: class EventBus(asyncio.Queue) publish/subscribe  
+  – put_config 에서 await event_bus.publish(ConfigUpdatedEvent(doc_id, version))  
+  – vector_cache_listener.py subscribe 후 invalidate_document_cache
+
+• 확장성 고려  
+  – 기존 ChromaDBManager 의 get_collection(doc_id) 호출부를 ConfigProvider 인터페이스로 치환 → 향후 다른 VectorDB 도 동일 컨피그 사용  
+  – DocumentService 에서 직접 파일 접근 제거 → DocumentConfigService 경유만 허용하여 계층 분리 완료
+</info added on 2025-07-20T22:11:14.641Z>
+
+## 2. 파일 업로드 엔드포인트 리팩토링 [done]
+### Dependencies: None
+### Description: POST /api/documents/upload-file 엔드포인트를 비동기 Form 업로드로 구현하고, 파일 저장·metadata.json·기본 config.json 생성 및 대용량 BackgroundTasks 처리를 포함한다.
+### Details:
+doc_id = slugify(filename)+timestamp(정규식 만족), DocumentLifecycleService.create_document() 호출, metadata.json에는 파일명·MIME·upload_ts 저장
+<info added on 2025-07-20T20:03:48.889Z>
+• 비동기 업로드 라우트  
+  POST /api/documents/upload-file → DocumentLifecycleService.create_document() 호출 후 DocumentUploadResponse 반환, Location 헤더 `/api/documents/{doc_id}` 설정
+
+• DocumentLifecycleService  
+  – _generate_doc_id(): slugify(파일명) + 13자리 millisecond 타임스탬프 → 정규식 `^[a-zA-Z0-9_-]+_\d{13}$` 검증 실패 시 ValueError  
+  – create_document(): 디렉터리 생성 → 원본 파일 저장 → metadata.json → 기본 config.json 순으로 원자적 처리, 실패 시 _rollback_creation() 으로 복구
+
+• DocumentStorageService  
+  – 업로드 가능 MIME: pdf, txt, md, docx  
+  – 최대 크기 100 MB, 파일명에 `..` 금지  
+  – `raw_data/{doc_id}/original.{ext}` 로 스트림 저장(aiofiles, 8 KB 버퍼)
+
+• DocumentMetadataService  
+  – metadata.json 필드: original_filename, content_type, file_size, upload_timestamp, file_hash(SHA-256), page_count(PDF 한정), language, extracted_text_preview(옵션)  
+  – 파일 해시·페이지 수 추출 후 pydantic 직렬화
+
+• 대용량 파일 처리  
+  – `LARGE_FILE_THRESHOLD` 초과 시 BackgroundTasks 로 extract_full_text / generate_preview / index_document 실행, 응답에서 processing=true 및 예상 처리 시간(“2-5 minutes”) 포함
+
+• 오류 처리  
+  – FileValidationError → 400, DocumentCreationError → 500, 기타 예외 로깅 후 500
+
+• 단위 테스트(pytest-asyncio)  
+  1. PDF 정상 업로드(201, 파일 구조 검증)  
+  2. 대용량 업로드 → processing 플래그 확인  
+  3. 허용되지 않는 MIME → 400  
+  4. 크기 초과 → 400
+
+• 의존 패키지: aiofiles, python-slugify, PyPDF2, python-multipart, structlog
+
+• 성능·보안  
+  – 스트림 방식으로 메모리 사용 최소화  
+  – SHA-256 해시·파일 유형 검증으로 무결성 보장  
+  – 트랜잭션 유사 롤백으로 중간 실패 시 잔여 파일/디렉터리 자동 정리
+</info added on 2025-07-20T20:03:48.889Z>
+<info added on 2025-07-20T22:12:11.040Z>
+• DocumentLifecycleService 리디자인  
+  – UploadSession 모델(upload_id, total_bytes, received_bytes, status, started_at, finished_at)을 Redis Hash로 관리, Pub/Sub 로 진행률 이벤트 발행(`upload_progress:{upload_id}` 채널)  
+  – stream_to_storage(upload_file: UploadFile, session) → 8 KB 청크 단위로 aiofiles.write, 매 500 ms 마다 session.received_bytes 갱신 & 이벤트 전송  
+  – MetadataExtractor 추상 클래스(register_extractor) + 구체 구현(PDFExtractor, TxtExtractor, DocxExtractor), create_document() 내부에서 파일 저장 직후 extractor 선택 → extract() 결과를 pydantic MetadataModel 로 리턴  
+  – PostProcessPipeline(background=True) 단계화: full-text 추출 → preview 생성 → 검색 인덱싱, 각 스텝 실패 시 retry(3회, 지수 백오프) 및 session.status=“error” 갱신  
+
+• 파일 업로드 로우-레벨 최적화  
+  – UploadFile.read(CHUNK_SIZE) 대신 await upload_file.seek(0) + iter_chunked(upload_file.file, CHUNK_SIZE) 패턴으로 파일-like 객체 직접 스트림  
+  – CHUNK_SIZE=64 KB, aiofiles buffered writer(write_through=False) 사용으로 sys-call 감소  
+  – 임계치(500 MB) 초과 시 /tmp/%(uuid)s.part 에 임시 저장 후 move(atomic) → 종료 시 finally 블록에서 .part 파일 존재 여부 확인 후 삭제  
+
+• 메타데이터 파싱 세부 전략  
+  – PDF: PyPDF2 로 페이지 수, writer.Info 에서 author/title, pdfminer.six 로 첫 1,000 자 텍스트 미리보기  
+  – TXT: chardet 로 인코딩 감지 후 universal newline 변환, 첫 20 줄 요약 저장  
+  – DOCX: python-docx → core_properties, paragraph extract; 이미지 포함 여부 flag  
+  – 공통: hashlib.sha256 스트림 계산, file_size != os.path.getsize 검증 → 불일치 시 ValidationError  
+
+• 보안/성능 강화  
+  – 파일 저장 직전 clamdscan async wrapper로 바이러스 검사, 1 초 타임아웃 발생 시 즉시 중단 및 502 반환  
+  – create_document() 내부 asyncio.to_thread 로 CPU 바운드 해시·PDF 텍스트 추출 병렬 실행  
+  – AnyIO capacity limiter(uploads=4) 로 동시 업로드 수 제한, 초과 시 429 응답  
+  – FailedStepException 발생 시 _rollback_creation() + add_to_dead_letter(upload_id) 로 후속 재처리 큐에 적재  
+
+• API 레이어 개선  
+  – POST /api/documents/upload-file → 응답 본문에 upload_id 포함, 102 Processing 상황에서는 HTTP-PATCH /api/documents/{upload_id}/cancel 지원  
+  – GET  /api/documents/upload-status/{upload_id} → {status, progress:0-100, eta_seconds} JSON 반환  
+  – WebSocket /ws/uploads/{upload_id} → 서버 → 클라이언트로 progress 이벤트 전송(예: {"progress":57})  
+  – POST /api/documents/batch-upload (multipart mixed) → 최대 10 개 파일, 각 파트별 개별 upload_id 할당 후 배열 반환  
+
+• 기존 DocumentService.upload_document 리팩터링 방안  
+  1. 동기식 파일 전체 읽기 로직 제거, 위 stream_to_storage 로 대체  
+  2. 메타데이터 추출 코드를 Extractor 플러그인으로 분리, LSP(단일 책임) 준수  
+  3. 예외 처리 범위를 넓혀 FileValidationError, VirusDetectedError, ExtractorError 세분화  
+  4. unit test: pytest-asyncio 에서 fake UploadFile(iter_bytes) 활용, 100 MB 샘플 파일로 스트레스 테스트, progress 이벤트 수신 검증 (>=5 회)
+</info added on 2025-07-20T22:12:11.040Z>
+
+## 3. 문서 삭제 엔드포인트 강화 및 보안 처리 [done]
+### Dependencies: None
+### Description: DELETE /api/documents/{doc_id} 엔드포인트에서 validate_document_path 사용으로 경로 탈출 방지, 미존재 문서 처리, 삭제 후 로그 기록 및 204 응답을 구현한다.
+### Details:
+DirectoryTraversalError, DocumentNotFoundError 커스텀 예외 정의 및 FastAPI ExceptionHandler 등록
+<info added on 2025-07-20T22:03:42.713Z>
+추가 구현 세부사항  
+
+• server/modules/utils/security.py  
+  – DocumentSecurityService.validate_document_path(): doc_id 정규식·길이 검증, realpath 기반 디렉터리 탈출 차단  
+  – audit_delete_operation(): structlog 기반 삭제 감사 로그 기록  
+  – DirectoryTraversalError 등 SecurityError 계층 정의  
+
+• server/modules/services/document_delete_service.py  
+  – delete_document():  
+     1) validate_document_path 호출  
+     2) 존재 여부 확인 후 DocumentNotFoundError 발생 처리  
+     3) _validate_deletion_permissions(추후 권한 체크용)  
+     4) _backup_metadata로 삭제 전 메타데이터 스냅샷 확보  
+     5) vector_service.remove_document → 실패해도 파일 삭제 지속  
+     6) _delete_directory_safely(shutil.rmtree)  
+     7) 성공/실패 모두 audit_delete_operation 기록  
+  – DeleteResult Pydantic 모델 반환  
+
+• server/modules/api/routers/documents.py  
+  – DELETE /api/documents/{doc_id} 엔드포인트 강화  
+     · Path 파라미터에 동일 정규식 적용  
+     · DirectoryTraversalError → 400, DocumentNotFoundError → 404, DocumentDeletionError → 500 매핑  
+
+• server/modules/exceptions/document_exceptions.py  
+  – DocumentDeletionError 추가 및 글로벌 ExceptionHandler 등록  
+
+• server/modules/api/models/document.py  
+  – DeleteResult, DocumentDeleteResponse 모델 정의(삭제 파일 수, vector 제거 여부 포함)  
+
+• tests/test_delete_endpoint.py  
+  – 정상 삭제, 경로 탈출 시도, 잘못된 형식, 미존재 문서, 벡터 서비스 실패, 감사 로그 생성 등 6개 시나리오 비동기 테스트 구현  
+
+보안·성능 고려사항  
+- 입력 정규식 및 resolve() 기반 경로 검증으로 DoS·Traversal 차단  
+- 삭제 전 vector DB 제거 → 원자성 확보  
+- 모든 시도에 대해 구조화된 감사 로그 저장, 오류 메시지 최소화 노출  
+
+위 내용을 반영하여 코드·테스트 작성 후 204 No Content 응답이 통과하도록 한다.
+</info added on 2025-07-20T22:03:42.713Z>
+<info added on 2025-07-20T22:12:44.851Z>
+세부 구현 계획(업데이트)
+
+1. DocumentDeleteService 아키텍처
+• SecurityValidator → 모든 입력값·경로·시스템 파일 여부 사전 검증  
+• AccessControlService(RBAC) → user_id·role 기반 소유권·권한 확인  
+• FileDeletionEngine → 원자적 파일 삭제·백업·복구 책임, shutil.rmtree 대신 send2trash + tmp 스테이징 폴더로 안전성 확보  
+• VectorSyncAdapter → Chroma 컬렉션에서 해당 doc_id 임베딩 제거 후 persist  
+• AuditTrailService → structlog + OpenTelemetry trace_id 로 삭제 이력 상시 기록  
+• DeleteOrchestrator → 위 모듈을 순차 실행하고 예외 발생 시 롤백 트리거
+
+2. 보안 검증 메커니즘
+• pathlib.Path.resolve(strict=False) 비교로 디렉터리 탈출·심볼릭 링크 공격 차단  
+• metadata.json 의 owner 필드와 요청자 비교, 불일치 시 PermissionDeniedError 발생  
+• 권한 매트릭스: ADMIN(읽기/삭제/배치)·EDITOR(읽기/삭제)·VIEWER(읽기)  
+• /etc, ~/.ssh 등 시스템 경로 패턴 블랙리스트 및 파일 확장자 화이트리스트 적용
+
+3. 삭제 프로세스 최적화
+• tmp_backup_dir 에 zip 아카이브 후 삭제 실행 → 성공 시 백업 retention=7일 cron 자동 정리  
+• VectorSyncAdapter 실패 시에도 파일 삭제 완료 후 재시도 큐(RQ) 등록  
+• dependency_checker.py 로 하위 파생 파일, 파싱 캐시, 이미지 썸네일 등 연관 아티팩트 동시 정리  
+• sqlite 트랜잭션 + 파일시스템 스테이징 폴더 조합으로 'all-or-nothing' 보장
+
+4. 에러 처리 및 복구
+• 단계별 CustomError 계층: ValidationError → 400, PermissionDeniedError → 403, PartialDeletionError → 409, SystemDeletionError → 500  
+• FileDeletionEngine 실패 시 tmp_backup_dir 을 원위치 복원하고 AuditTrailService 에 rollback=true 플래그 기록  
+• 복구 가능 항목은 DELETE 결과 객체에 recoverable=true 포함, /recover/{doc_id} POST 로 즉시 복구 지원  
+• Sentry 연동으로 상세 stacktrace, doc_id, user_id, trace_id 자동 전송
+
+5. API 엔드포인트 강화
+• DELETE /api/documents/{doc_id}: 헤더 X-Confirm-Delete: true 없으면 428 PreconditionRequired  
+• DELETE /api/documents?ids=doc1,doc2: 최대 20개까지 배치 처리, DeleteBatchResult 반환  
+• 삭제 요청 시 202 Accepted + Location: /delete-jobs/{job_id} 비동기 모드 지원 → SSE 로 진행률 0~100 전송  
+• OpenAPI 문서에 보안 스키마(BearerAuth)·권한 필요 등급·예상 오류 코드(400/403/409/500) 명시
+
+추가 작업 항목
+• tests/test_document_delete_service.py 에 롤백·배치·권한·백업·복구 케이스 10종 작성  
+• docs/openapi/delete.yml 업데이트 및 삭제 플로우 순서도 다이어그램 첨부
+</info added on 2025-07-20T22:12:44.851Z>
+
+## 4. 동기화(sync) 엔드포인트 개선 및 ingest 리팩토링 [done]
+### Dependencies: None
+### Description: GET /api/documents/sync 엔드포인트를 config-driven Ingestion 서비스로 리팩토링하고, 단일/전체 문서 sync, force 옵션, BackgroundTasks 배치 처리 로직을 구현한다.
+### Details:
+ConfigurableIngestionService.ingest_document(force_reindex) 사용, DocumentLifecycleService.sync_* 메서드 작성
+<info added on 2025-07-20T22:05:47.000Z>
+• 설정 기반 문서 인제스트 로직(ingest_document) 전체 구현: 문서 별 config 로드→파일 검사→재색인 필요 여부 판단→텍스트 분할→벡터 upsert→ingestion_metadata.json 저장. <server/modules/services/configurable_ingestion_service.py> 추가  
+• DocumentLifecycleService 확장: sync_single_document / sync_all_documents / _discover_documents / _sync_document_safe 등 구현, 배치 크기 10, force 플래그·진행 로그·에러 격리 포함  
+• /api/documents/sync 라우트 리팩토링: 단일·전체 sync 처리, BACKGROUND_SYNC_THRESHOLD 초과 시 BackgroundTasks 로 비동기 실행, SyncResponse·BatchSyncResponse 반환  
+• Pydantic 모델 추가 및 갱신: IngestionResult, SyncResult, BatchSyncResult, SyncResponse, BatchSyncResponse  
+• 테스트 케이스 6종 작성(test_sync_endpoint.py): 단일 sync, 강제 sync, 소규모·대규모 배치, 존재하지 않는 문서, 잘못된 doc_id, config-driven chunking 검증  
+• 성능/아키텍처 개선 사항 문서화: Intelligent Skipping, Batch & Concurrent Processing, Progress Logging, Error Isolation 등
+</info added on 2025-07-20T22:05:47.000Z>
+<info added on 2025-07-20T22:13:37.072Z>
+추가 백엔드 구현 계획
+
+1. ConfigurableIngestionService 아키텍처 확장  
+• BatchOptimizer: 문서 크기·우선순위·IO 대기시간을 고려하여 동적 배치 크기 결정.  
+• BackgroundSyncTracker: BackgroundTasks·Celery 양쪽을 지원하는 추상 레이어, task_id ↔ document_id 매핑 및 상태 저장(redis hash).  
+• ProgressPublisher: ingest 단계별(검사→파싱→분할→업서트) 진행률을 pub/sub(WebSocket, SSE)로 송신.  
+• RetryHandler: 단계별 오류 코드를 분석하여 지수백오프·최대 3회 재시도, 복구 실패 시 dead-letter 큐로 이동.  
+
+2. 동기화 성능 향상 전략  
+• asyncio.TaskGroup + semaphore 로 동시 8~16개 문서 병렬 처리, CPU bound 단계는 run_in_threadpool.  
+• 대용량 파일은 mmap·iter_chunk() 제너레이터로 스트리밍하여 peak 메모리 <100 MB 유지.  
+• incremental_hash(meta, content_hash) 비교로 변경된 블록만 재색인, vecdb.upsert(batch_diff).  
+• DuplicateDetector(redis set)로 같은 해시 재인제스트 방지, hit 시 즉시 skip 로그 기록.  
+
+3. 백그라운드 작업 관리  
+• fastapi_celery.Router 도입: /sync 요청이 BACKGROUND_SYNC_THRESHOLD 초과 시 Celery queue=enrich 로 디스패치.  
+• TaskStatus 모델(id, state, progress, retries, started_at, finished_at) → redis sorted-set(타임라인) 저장, /sync/status/{task_id} API 제공.  
+• on_failure signal 에서 RetryHandler.trigger(); 최대 재시도 초과 시 slack_webhook 알림.  
+• prometheus_client 로 작업 큐 길이·실행 시간·메모리 사용량 지표 노출.  
+
+4. 설정 기반 처리 고도화  
+• ingest_config.yml:  
+  └─default: chunk_size, overlap, profile  
+  └─file_types: pdf→pdfminer, csv→pandas, md→markdown-it …  
+  └─rules: include_glob, exclude_regex, pre_processors[]  
+• ConfigLoader 가 환경·문서 태그를 기준으로 최적 profile(quick/balanced/deep) 선택.  
+• RuleEngine.apply() 단계에서 사용자 정의 Python 플러그인(importlib) 호출 가능.  
+
+5. API 개선 사항  
+• GET /api/documents/sync?ids=&force=&profile= : 선택적 파일·프로파일 동기화 지원.  
+• GET /api/documents/sync/status/{task_id} : 200 OK {state, progress%, current_doc}.  
+• GET /api/documents/sync/history?limit=50 : 최근 작업 로그·결과 반환.  
+• /sync 엔드포인트 내부에서 RawDataSyncManager → DocumentLifecycleService 로 완전 이관, 의존성 주입(Repository 패턴)으로 테스트 용이성 확보.  
+
+기존 RawDataSyncManager·sync_documents 분석 결과  
+• 파일 시스템 순회 로직이 I/O-bound 임에도 동기 실행 → _discover_documents() 를 async-fs(read_dir) + semaphore 로 교체.  
+• 중복 upsert 방어 로직 미흡 → DuplicateDetector 추가.  
+• 단일 try/except 블록으로 오류가 섞여 로그 추적이 어려움 → 단계별 에러 격리 구조로 재설계.  
+
+이 계획을 기준으로 모듈별 PR 분할(ingestion_core, background_tasks, api_routes) 및 단계별 마이그레이션 일정을 수립한다.
+</info added on 2025-07-20T22:13:37.072Z>
+<info added on 2025-07-21T06:17:13.447Z>
+• Sync API 개선: 기존 벡터 DB를 DocumentService.delete_database()로 완전 삭제 후 재생성(DELETE + RECREATE)하는 로직 추가, 충돌 문제 해결  
+• /api/documents/add POST 엔드포인트 신규 구현: doc_id · chunk_size · chunk_overlap 쿼리 파라미터 지원, 기존 DB에 신규 문서만 추가  
+• ConfigurableIngestionService 리팩토링: _perform_ingestion 최적화, PyPDFLoader→RecursiveCharacterTextSplitter→ChromaDBManager 직접 연동, 문서별 메타데이터(doc_id · source_file) 저장, add_documents()/create_new_db 분기 처리  
+• API 테스트 완료: Add API 56개 청크 생성, Sync API 정상 작동 확인  
+• 버그 수정: Unicode(이모지) 제거, ChunkConfig import 경로 재정비, 쿼리 파라미터 형식 통일  
+→ 동기화·추가 기능 완전 분리 및 정상 동작 확인
+</info added on 2025-07-21T06:17:13.447Z>
+
+## 5. 마이그레이션 및 테스트 스크립트 작성 [done]
+### Dependencies: None
+### Description: scripts/backfill_default_config.py를 작성해 legacy 문서에 config.json·metadata.json을 생성하고, 전체 API에 대한 pytest 기반 단위·통합 테스트를 작성한다.
+### Details:
+DocumentMigrationService.migrate_legacy_documents() 사용, DEFAULT 값은 settings.py에서 읽어옴
+<info added on 2025-07-20T22:07:29.358Z>
+세부 구현 계획
+
+1. 마이그레이션 스크립트 아키텍처
+• scripts/migrate_v2.py: click CLI + rich.Progress 적용
+• Alembic revision → ① documents_v2 테이블, ② foreign key/인덱스 추가, downgrade 단계 포함
+• DataMigrationRunner:
+    ‑ pre_check(): 레거시 ChromaDBManager로 doc 수, 상태 스냅샷
+    ‑ migrate_data(): 각 doc_id별 벡터 → JSONB 필드, 신규 파일 경로(server/raw_data/{doc_id}/)로 이동
+    ‑ migrate_config(): 기존 settings.yaml → DocumentConfig 모델 직렬화
+    ‑ migrate_file_path(): legacy/{doc_id}.pdf → raw_data/{doc_id}/original_file.pdf
+• checkpoints.json 저장(마이그레이션 단계별 완료 플래그) → 실패 시 rollback_handler()로 체크포인트 이전 단계로 자동 복귀
+
+2. 테스트 프레임워크
+• pytest-asyncio + FastAPI TestClient(fixture: app_override)로 전 API 경로 테스트
+• tests/integration/test_document_flow.py: 업로드→동기화→삭제 전체 사이클 검증
+• tests/security/test_path_traversal.py: “../../etc/passwd” 업로드 시 400 반환 확인
+• locustfile.py: 1~10MB PDF 1,000건 처리 TPS 측정, p95 < 500ms 목표
+• WebSocket Test: websockets.connect(“ws://test/documents/ws”) → 실시간 진행률 이벤트 수신 여부 검증
+
+3. 구현 세부 항목
+• MigrationValidator: pre_migration_state.json/ post_migration_state.json diff → 무결성 체크
+• AtomicTransactionManager(SQLAlchemy session.begin_nested) + file_system_tx(ctx.rm_on_error)로 원자성 보장
+• 실패 시 rollback.sh 자동 실행(Alembic downgrade + 파일 이동 복구)
+• tests/_data_factory.py: Faker+pdfkit로 50개 샘플 PDF/metadata 생성
+• benchmark/perf_runner.py: asyncio.gather + time.perf_counter() 로 함수별 latency 기록
+• bandit ‑r server/ & safety check requirements.txt → CI 파이프라인에 편입
+
+4. 코드 예시(발췌)
+```python
+# tests/conftest.py
+@pytest.fixture
+def migrated_app(tmp_path):
+    os.environ["RAW_DATA_ROOT"] = tmp_path.as_posix()
+    run_cli(["python", "scripts/migrate_v2.py", "--dry-run"])
+    yield TestClient(app)
+
+# scripts/migrate_v2.py (발췌)
+with engine.begin() as conn:
+    context.configure(connection=conn, target_metadata=Base.metadata)
+    context.run_migrations()
+
+for doc in legacy_docs:
+    progress.update(task, advance=1, description=f"doc:{doc.id}")
+    try:
+        new_id = migrate_single_document(doc)
+        checkpoints.store(new_id)
+    except Exception as e:
+        logger.exception(e)
+        rollback_handler()
+        sys.exit(1)
+```
+위 계획에 따라 코드/테스트를 병행 개발하고, GH Actions 워크플로우(migration-tests.yml)에서 `pytest -m "not e2e" && alembic upgrade head` 성공 시에만 배포 단계로 진행한다.
+</info added on 2025-07-20T22:07:29.358Z>
+

@@ -1,0 +1,76 @@
+# Task ID: 17
+# Title: 동적 프로그래밍 기반 세금 계산 최적화 기능 추가
+# Status: deferred
+# Dependencies: 4
+# Priority: medium
+# Description: 세법 RAG 검색 결과를 이용해 동적 프로그래밍(DP)으로 최적의 세금 계산 방안을 제시하는 LangChain Tool & Chain 을 구현한다.
+# Details:
+1. 시나리오 파서 모듈(tax_dp/parser.py)
+   • 자연어·JSON 형태 입력을 Pydantic TaxScenario 모델로 정규화(소득, 공제, 사업 유형, 세율표 등 필드화)
+   • 불완전 입력 보정: 기본값/LLM 추론으로 누락 항목 채우기
+
+2. 세법 규정 RAG 검색
+   • 기존 StuffDocumentsChain(작업 #4) 을 래핑하여 `retrieve_tax_rules(scenario)` 함수 구현
+   • 검색 k 값은 시나리오 복잡도(항목 수)에 따라 동적 조정(k=4~10)
+   • 반환 값: [(rule_text, metadata{article,law_name}), …]
+
+3. DP 최적화 엔진(tax_dp/dp_engine.py)
+   • sympy 이용, 상태 = (과세표준, 공제 선택 여부, 과세 구간)
+   • 전이함수: f(state, action) → (next_state, cost)
+   • 메모이제이션으로 O(N·M) 복잡도 유지, numpy array cache 사용
+   • 다세목 지원: 시나리오.tax_type 이 list 인 경우 tax_type 별 부분 DP 후 결합
+   • 결과 객체 TaxOptimizationResult(optimized_tax:int, path:list[Step], complexity:int)
+
+4. LangChain Tool 통합(tax_dp/tool.py)
+   ```python
+   class TaxOptimizerTool(BaseTool):
+       name, description = "tax_optimizer", "세법 규정을 인용하여 세금을 최소화하는 DP 계산기"
+       def _run(self, scenario:str):
+           parsed = parse_scenario(scenario)
+           rules = retrieve_tax_rules(parsed)
+           result = dp_optimize(parsed, rules)
+           return serialize(result, rules)
+   ```
+   • 출력: {"optimized_tax":…, "steps":[…], "citations":[…]}
+
+5. RAG+DP 체인(tax_dp/chain.py)
+   • SimpleSequentialChain([TaxOptimizerTool, AnswerFormatterChain])
+   • Formatter 는 steps & citations 를 markdown 표 형태로 변환, 각 citation 에 rule.metadata.article 태그
+
+6. 벡터DB 규정 삽입 스크립트(scripts/index_tax_rules.py)
+   • raw 세법 PDF/HTML → langchain.text_splitter → vectordb.add_documents
+   • tax, law, article 메타데이터 필수
+
+7. 투명성 & 로깅
+   • langsmith_tracer tag “dp” 추가
+   • result.complexity, cache_hit_rate 로그 기록
+
+8. API 엔드포인트 추가(routes/tax_optimize.py)
+   POST /optimize-tax  {scenario:string}
+   → JSONResponse(result)
+
+9. 문서화(README.md)
+   사용 예제 cURL 및 응답 샘플 포함
+
+# Test Strategy:
+1. 단위 테스트(PyTest)
+   a. test_parser_edge_cases: 불완전 입력 → TaxScenario 필드 자동 채움 확인
+   b. test_dp_engine_simple: 소득세 단일 구간 예시, 수동 계산 값과 동일한 optimized_tax 검증
+   c. test_dp_multi_tax: 소득세+부가가치세 복합 시나리오, 결과 구조·복수 세금 합계 검증
+
+2. 통합 테스트
+   • FastAPI TestClient 로 POST /optimize-tax
+   • 시나리오: "연봉 95,000,000원, 개인사업자 경비율 40%" →
+     - 응답 코드 200
+     - optimized_tax 키 존재 및 int 타입
+     - citations 리스트 길이 > 0, 각 원문에 law_name 존재
+     - steps 리스트가 상태·액션·비용 필드 포함
+
+3. 회귀 테스트
+   • 이미 존재하는 /chat SSE 경로에 동일 시나리오 입력 시, stream 최종 덩어리에서 "optimized_tax" 포함 확인
+
+4. 성능 테스트
+   • 100개 랜덤 시나리오 batch → 평균 응답 시간 < 3s, 메모리 ≤ 500 MB
+
+5. 문서 인덱싱 검증
+   • scripts/index_tax_rules.py 실행 후 vectordb.count() > 10,000, 메타데이터 필드 누락 없음

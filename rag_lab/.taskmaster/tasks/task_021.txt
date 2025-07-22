@@ -1,0 +1,591 @@
+# Task ID: 21
+# Title: 최신 정보 가중치 탐색 기능 구현
+# Status: pending
+# Dependencies: 19, 20
+# Priority: medium
+# Description: RAG 시스템에서 최신 정보에 가중치를 부여하는 탐색 기능을 구현하여 시간적 관련성이 높은 문서를 우선적으로 검색 결과에 반영한다.
+# Details:
+## 구현 세부사항
+
+1. **시간 가중치 모델 설계 (`rag/models/time_weight.py`)**
+   - 문서 생성/수정 시간 기반 가중치 계산 함수 구현
+   ```python
+   from datetime import datetime
+   import math
+   
+   def calculate_time_weight(doc_timestamp, base_weight=1.0, decay_factor=0.1, max_boost=2.0):
+       """
+       문서의 시간적 신선도에 따른 가중치 계산
+       
+       Args:
+           doc_timestamp (datetime): 문서 생성/수정 시간
+           base_weight (float): 기본 가중치
+           decay_factor (float): 시간 경과에 따른 감소 계수
+           max_boost (float): 최대 가중치 증폭값
+           
+       Returns:
+           float: 계산된 시간 가중치
+       """
+       now = datetime.now()
+       days_diff = (now - doc_timestamp).days
+       
+       # 지수 감소 함수 적용 (최신 문서일수록 높은 가중치)
+       time_weight = base_weight * math.exp(-decay_factor * days_diff)
+       
+       # 최대 가중치 제한
+       return min(time_weight, max_boost)
+   ```
+
+2. **Elasticsearch 시간 가중치 검색 구현 (`rag/search/time_weighted_search.py`)**
+   - BM25 + 벡터 검색에 시간 가중치를 결합한 함수 구현
+   ```python
+   from rag.search.elasticsearch_client import get_elasticsearch_client
+   from rag.models.time_weight import calculate_time_weight
+   
+   def time_weighted_search(query, index_name, vector_field, text_field, timestamp_field, 
+                           top_k=10, vector=None, time_weight_factor=0.3):
+       """
+       시간 가중치를 적용한 하이브리드 검색 수행
+       
+       Args:
+           query (str): 검색 쿼리
+           index_name (str): 검색할 인덱스 이름
+           vector_field (str): 벡터 필드 이름
+           text_field (str): 텍스트 필드 이름
+           timestamp_field (str): 타임스탬프 필드 이름
+           top_k (int): 반환할 결과 수
+           vector (list): 쿼리 벡터
+           time_weight_factor (float): 시간 가중치 영향력 계수
+           
+       Returns:
+           list: 검색 결과 목록
+       """
+       client = get_elasticsearch_client()
+       
+       # 기본 하이브리드 검색 수행
+       search_results = client.search(
+           index=index_name,
+           body={
+               "query": {
+                   "bool": {
+                       "should": [
+                           {"match": {text_field: query}},  # BM25
+                           {"knn": {vector_field: {"vector": vector, "k": top_k}}}  # 벡터 검색
+                       ]
+                   }
+               },
+               "_source": ["*", timestamp_field],
+               "size": top_k * 2  # 가중치 재조정을 위해 더 많은 결과 가져오기
+           }
+       )
+       
+       # 시간 가중치 적용하여 결과 재정렬
+       weighted_results = []
+       for hit in search_results["hits"]["hits"]:
+           base_score = hit["_score"]
+           timestamp = datetime.fromisoformat(hit["_source"][timestamp_field])
+           time_weight = calculate_time_weight(timestamp)
+           
+           # 최종 점수 = 기본 점수 + (시간 가중치 * 시간 가중치 영향력 계수)
+           final_score = base_score + (time_weight * time_weight_factor * base_score)
+           
+           weighted_results.append({
+               "document": hit["_source"],
+               "original_score": base_score,
+               "time_weight": time_weight,
+               "final_score": final_score
+           })
+       
+       # 최종 점수로 정렬하고 상위 k개 반환
+       weighted_results.sort(key=lambda x: x["final_score"], reverse=True)
+       return weighted_results[:top_k]
+   ```
+
+3. **시간 가중치 설정 관리 (`rag/config/time_weight_config.py`)**
+   - 시간 가중치 파라미터 설정 및 관리 클래스 구현
+   ```python
+   from pydantic import BaseModel, Field
+   
+   class TimeWeightConfig(BaseModel):
+       """시간 가중치 설정 모델"""
+       base_weight: float = Field(default=1.0, ge=0.1, le=10.0)
+       decay_factor: float = Field(default=0.1, ge=0.01, le=1.0)
+       max_boost: float = Field(default=2.0, ge=1.0, le=5.0)
+       time_weight_factor: float = Field(default=0.3, ge=0.0, le=1.0)
+       
+       def to_dict(self):
+           return self.dict()
+       
+       @classmethod
+       def from_dict(cls, data):
+           return cls(**data)
+   ```
+
+4. **FastAPI 엔드포인트 확장 (`rag/api/search_routes.py`)**
+   - 시간 가중치 검색 API 엔드포인트 추가
+   ```python
+   from fastapi import APIRouter, Depends, Query
+   from rag.search.time_weighted_search import time_weighted_search
+   from rag.config.time_weight_config import TimeWeightConfig
+   from rag.models.embedding import get_embedding
+   
+   router = APIRouter()
+   
+   @router.post("/search/time-weighted")
+   async def time_weighted_search_endpoint(
+       query: str,
+       index_name: str = Query("documents"),
+       top_k: int = Query(10, ge=1, le=50),
+       time_weight_config: TimeWeightConfig = None
+   ):
+       """시간 가중치를 적용한 검색 수행"""
+       # 기본 설정 사용
+       if time_weight_config is None:
+           time_weight_config = TimeWeightConfig()
+       
+       # 쿼리 임베딩 생성
+       query_vector = get_embedding(query)
+       
+       # 시간 가중치 검색 수행
+       results = time_weighted_search(
+           query=query,
+           index_name=index_name,
+           vector_field="embedding",
+           text_field="content",
+           timestamp_field="created_at",
+           top_k=top_k,
+           vector=query_vector,
+           time_weight_factor=time_weight_config.time_weight_factor
+       )
+       
+       return {
+           "query": query,
+           "results": results,
+           "time_weight_config": time_weight_config.to_dict()
+       }
+   ```
+
+5. **LangGraph 파이프라인 통합 (`rag/pipelines/time_weighted_rag.py`)**
+   - 기존 LangGraph 파이프라인에 시간 가중치 검색 노드 추가
+   ```python
+   from langgraph.graph import StateGraph
+   from rag.search.time_weighted_search import time_weighted_search
+   from rag.models.embedding import get_embedding
+   
+   def retrieve_with_time_weight(state):
+       """시간 가중치를 적용한 문서 검색 노드"""
+       query = state["query"]
+       query_vector = get_embedding(query)
+       
+       # 시간 가중치 검색 수행
+       results = time_weighted_search(
+           query=query,
+           index_name="documents",
+           vector_field="embedding",
+           text_field="content",
+           timestamp_field="created_at",
+           top_k=5,
+           vector=query_vector
+       )
+       
+       # 결과에서 문서 추출
+       documents = [item["document"] for item in results]
+       
+       # 상태 업데이트
+       return {
+           **state,
+           "retrieved_documents": documents,
+           "search_metadata": {
+               "time_weighted_scores": [
+                   {"id": item["document"]["id"], 
+                    "original_score": item["original_score"],
+                    "time_weight": item["time_weight"],
+                    "final_score": item["final_score"]}
+                   for item in results
+               ]
+           }
+       }
+   
+   # LangGraph 파이프라인에 노드 추가
+   def build_time_weighted_rag_graph():
+       workflow = StateGraph()
+       
+       # 노드 추가
+       workflow.add_node("retrieve_with_time_weight", retrieve_with_time_weight)
+       # 기존 노드들 추가...
+       
+       # 엣지 연결
+       workflow.add_edge("start", "retrieve_with_time_weight")
+       # 나머지 엣지 연결...
+       
+       return workflow.compile()
+   ```
+
+6. **시간 가중치 파라미터 최적화 도구 (`rag/tools/time_weight_optimizer.py`)**
+   - 다양한 쿼리에 대한 시간 가중치 파라미터 최적화 기능
+   ```python
+   import numpy as np
+   from sklearn.model_selection import ParameterGrid
+   from rag.search.time_weighted_search import time_weighted_search
+   from rag.models.embedding import get_embedding
+   
+   def optimize_time_weights(test_queries, relevant_docs, index_name):
+       """
+       시간 가중치 파라미터 최적화
+       
+       Args:
+           test_queries (list): 테스트 쿼리 목록
+           relevant_docs (dict): 쿼리별 관련 문서 ID 목록
+           index_name (str): 검색할 인덱스 이름
+           
+       Returns:
+           dict: 최적화된 시간 가중치 파라미터
+       """
+       # 파라미터 그리드 정의
+       param_grid = {
+           'base_weight': [0.5, 1.0, 1.5],
+           'decay_factor': [0.05, 0.1, 0.2],
+           'max_boost': [1.5, 2.0, 2.5],
+           'time_weight_factor': [0.1, 0.3, 0.5]
+       }
+       
+       grid = ParameterGrid(param_grid)
+       best_score = 0
+       best_params = None
+       
+       # 각 파라미터 조합에 대해 평가
+       for params in grid:
+           total_score = 0
+           
+           for query in test_queries:
+               query_vector = get_embedding(query)
+               
+               results = time_weighted_search(
+                   query=query,
+                   index_name=index_name,
+                   vector_field="embedding",
+                   text_field="content",
+                   timestamp_field="created_at",
+                   top_k=10,
+                   vector=query_vector,
+                   time_weight_factor=params['time_weight_factor']
+               )
+               
+               # 검색 결과에서 문서 ID 추출
+               result_ids = [item["document"]["id"] for item in results]
+               
+               # 관련 문서가 상위에 랭크되었는지 평가 (NDCG 등 메트릭 사용)
+               # 여기서는 간단한 예시로 관련 문서의 순위 기반 점수 계산
+               query_score = 0
+               for i, doc_id in enumerate(result_ids):
+                   if doc_id in relevant_docs.get(query, []):
+                       # 순위가 높을수록 더 높은 점수 부여
+                       query_score += 1.0 / (i + 1)
+               
+               total_score += query_score
+           
+           # 더 좋은 파라미터 조합 발견 시 업데이트
+           if total_score > best_score:
+               best_score = total_score
+               best_params = params
+       
+       return best_params
+   ```
+
+7. **시간 가중치 시각화 도구 (`rag/tools/time_weight_visualizer.py`)**
+   - 시간 가중치 영향 시각화 및 분석 도구
+   ```python
+   import matplotlib.pyplot as plt
+   import pandas as pd
+   from datetime import datetime, timedelta
+   from rag.models.time_weight import calculate_time_weight
+   
+   def visualize_time_weights(base_weight=1.0, decay_factor=0.1, max_boost=2.0):
+       """시간 경과에 따른 가중치 변화 시각화"""
+       now = datetime.now()
+       days = list(range(0, 366, 30))  # 1년 동안 30일 간격
+       
+       weights = []
+       for day in days:
+           doc_date = now - timedelta(days=day)
+           weight = calculate_time_weight(
+               doc_date, base_weight, decay_factor, max_boost
+           )
+           weights.append(weight)
+       
+       plt.figure(figsize=(10, 6))
+       plt.plot(days, weights, marker='o')
+       plt.title('시간 경과에 따른 문서 가중치 변화')
+       plt.xlabel('문서 생성 후 경과일')
+       plt.ylabel('가중치')
+       plt.grid(True)
+       plt.savefig('time_weight_curve.png')
+       
+       return {
+           'days': days,
+           'weights': weights,
+           'params': {
+               'base_weight': base_weight,
+               'decay_factor': decay_factor,
+               'max_boost': max_boost
+           }
+       }
+   
+   def compare_search_results(query, with_time_weight=True, top_k=5):
+       """시간 가중치 적용 전후 검색 결과 비교"""
+       # 구현 생략
+       pass
+   ```
+
+## 통합 및 배포 고려사항
+
+1. **데이터베이스 스키마 업데이트**
+   - 문서 메타데이터에 타임스탬프 필드 추가 및 인덱싱
+   - 기존 문서의 타임스탬프 정보 마이그레이션
+
+2. **성능 최적화**
+   - 대량 문서 처리 시 시간 가중치 계산 최적화
+   - 캐싱 전략 적용 (자주 사용되는 시간 가중치 계산 결과 캐싱)
+
+3. **사용자 인터페이스 확장**
+   - 시간 가중치 파라미터 조정 UI 추가
+   - 검색 결과에 시간 정보 및 가중치 영향 표시
+
+4. **모니터링 및 로깅**
+   - 시간 가중치 적용 전후 검색 성능 비교 메트릭 수집
+   - 사용자 피드백 기반 파라미터 자동 조정 메커니즘
+
+# Test Strategy:
+## 테스트 전략
+
+1. **단위 테스트 (pytest)**
+   - 시간 가중치 계산 함수 테스트
+   ```python
+   def test_time_weight_calculation():
+       """시간 가중치 계산 함수 테스트"""
+       now = datetime.now()
+       yesterday = now - timedelta(days=1)
+       last_month = now - timedelta(days=30)
+       last_year = now - timedelta(days=365)
+       
+       # 최신 문서는 높은 가중치를 가져야 함
+       assert calculate_time_weight(now) > calculate_time_weight(yesterday)
+       assert calculate_time_weight(yesterday) > calculate_time_weight(last_month)
+       assert calculate_time_weight(last_month) > calculate_time_weight(last_year)
+       
+       # 최대 가중치 제한 테스트
+       assert calculate_time_weight(now, max_boost=1.5) <= 1.5
+   
+   def test_time_weighted_search():
+       """시간 가중치 검색 함수 테스트"""
+       # 모의 Elasticsearch 클라이언트 설정
+       mock_client = MagicMock()
+       mock_client.search.return_value = {
+           "hits": {
+               "hits": [
+                   {
+                       "_score": 0.8,
+                       "_source": {
+                           "id": "doc1",
+                           "content": "최신 세금 정책",
+                           "created_at": datetime.now().isoformat()
+                       }
+                   },
+                   {
+                       "_score": 0.9,
+                       "_source": {
+                           "id": "doc2",
+                           "content": "오래된 세금 정책",
+                           "created_at": (datetime.now() - timedelta(days=365)).isoformat()
+                       }
+                   }
+               ]
+           }
+       }
+       
+       with patch('rag.search.time_weighted_search.get_elasticsearch_client', return_value=mock_client):
+           results = time_weighted_search(
+               query="세금 정책",
+               index_name="test_index",
+               vector_field="embedding",
+               text_field="content",
+               timestamp_field="created_at",
+               vector=[0.1] * 384  # 가상 벡터
+           )
+           
+           # 시간 가중치 적용 후 최신 문서가 더 높은 점수를 가져야 함
+           assert results[0]["document"]["id"] == "doc1"
+           assert results[0]["final_score"] > results[1]["final_score"]
+   ```
+
+2. **통합 테스트**
+   - LangGraph 파이프라인 통합 테스트
+   ```python
+   def test_time_weighted_rag_pipeline():
+       """시간 가중치 RAG 파이프라인 통합 테스트"""
+       # 테스트용 상태 초기화
+       initial_state = {
+           "query": "최근 세금 정책 변경사항은 무엇인가요?"
+       }
+       
+       # 파이프라인 실행
+       graph = build_time_weighted_rag_graph()
+       final_state = graph.invoke(initial_state)
+       
+       # 결과 검증
+       assert "retrieved_documents" in final_state
+       assert "search_metadata" in final_state
+       assert "time_weighted_scores" in final_state["search_metadata"]
+       
+       # 최신 문서가 상위에 랭크되었는지 확인
+       docs = final_state["retrieved_documents"]
+       if len(docs) >= 2:
+           doc1_date = datetime.fromisoformat(docs[0]["created_at"])
+           doc2_date = datetime.fromisoformat(docs[1]["created_at"])
+           assert doc1_date >= doc2_date
+   ```
+
+3. **API 엔드포인트 테스트**
+   - FastAPI 테스트 클라이언트를 사용한 엔드포인트 테스트
+   ```python
+   def test_time_weighted_search_endpoint():
+       """시간 가중치 검색 API 엔드포인트 테스트"""
+       from fastapi.testclient import TestClient
+       from rag.api.main import app
+       
+       client = TestClient(app)
+       
+       response = client.post(
+           "/search/time-weighted",
+           json={
+               "query": "최근 세금 정책",
+               "time_weight_config": {
+                   "base_weight": 1.0,
+                   "decay_factor": 0.1,
+                   "max_boost": 2.0,
+                   "time_weight_factor": 0.3
+               }
+           }
+       )
+       
+       assert response.status_code == 200
+       data = response.json()
+       assert "results" in data
+       assert "time_weight_config" in data
+   ```
+
+4. **파라미터 최적화 테스트**
+   - 시간 가중치 파라미터 최적화 도구 테스트
+   ```python
+   def test_time_weight_optimizer():
+       """시간 가중치 파라미터 최적화 도구 테스트"""
+       # 테스트 쿼리 및 관련 문서 정의
+       test_queries = ["세금 공제 방법", "최근 세법 개정"]
+       relevant_docs = {
+           "세금 공제 방법": ["doc1", "doc3"],
+           "최근 세법 개정": ["doc2", "doc5"]
+       }
+       
+       # 모의 검색 결과 설정
+       with patch('rag.tools.time_weight_optimizer.time_weighted_search') as mock_search:
+           mock_search.side_effect = lambda **kwargs: [
+               {"document": {"id": f"doc{i}"}} for i in range(1, 6)
+           ]
+           
+           with patch('rag.tools.time_weight_optimizer.get_embedding', return_value=[0.1] * 384):
+               best_params = optimize_time_weights(
+                   test_queries=test_queries,
+                   relevant_docs=relevant_docs,
+                   index_name="test_index"
+               )
+               
+               assert isinstance(best_params, dict)
+               assert "base_weight" in best_params
+               assert "decay_factor" in best_params
+               assert "max_boost" in best_params
+               assert "time_weight_factor" in best_params
+   ```
+
+5. **성능 테스트**
+   - 대량 문서에 대한 시간 가중치 검색 성능 테스트
+   ```python
+   def test_time_weighted_search_performance():
+       """시간 가중치 검색 성능 테스트"""
+       import time
+       
+       # 대량의 테스트 문서 생성
+       num_docs = 10000
+       mock_hits = []
+       now = datetime.now()
+       
+       for i in range(num_docs):
+           # 무작위 날짜 생성 (최대 2년 전)
+           days_ago = random.randint(0, 730)
+           doc_date = now - timedelta(days=days_ago)
+           
+           mock_hits.append({
+               "_score": random.uniform(0.5, 1.0),
+               "_source": {
+                   "id": f"doc{i}",
+                   "content": f"테스트 문서 {i}",
+                   "created_at": doc_date.isoformat()
+               }
+           })
+       
+       mock_response = {"hits": {"hits": mock_hits}}
+       
+       with patch('rag.search.time_weighted_search.get_elasticsearch_client') as mock_client:
+           mock_instance = MagicMock()
+           mock_instance.search.return_value = mock_response
+           mock_client.return_value = mock_instance
+           
+           start_time = time.time()
+           results = time_weighted_search(
+               query="테스트 쿼리",
+               index_name="test_index",
+               vector_field="embedding",
+               text_field="content",
+               timestamp_field="created_at",
+               vector=[0.1] * 384
+           )
+           end_time = time.time()
+           
+           # 처리 시간이 합리적인지 확인 (예: 1초 미만)
+           assert end_time - start_time < 1.0
+           assert len(results) == 10  # top_k 기본값
+   ```
+
+6. **시각화 도구 테스트**
+   - 시간 가중치 시각화 도구 테스트
+   ```python
+   def test_time_weight_visualizer():
+       """시간 가중치 시각화 도구 테스트"""
+       with patch('rag.tools.time_weight_visualizer.plt') as mock_plt:
+           result = visualize_time_weights(
+               base_weight=1.0,
+               decay_factor=0.1,
+               max_boost=2.0
+           )
+           
+           # plt.figure가 호출되었는지 확인
+           mock_plt.figure.assert_called_once()
+           # plt.savefig가 호출되었는지 확인
+           mock_plt.savefig.assert_called_once()
+           
+           assert "days" in result
+           assert "weights" in result
+           assert "params" in result
+           assert len(result["days"]) == len(result["weights"])
+   ```
+
+7. **사용자 시나리오 테스트**
+   - 실제 사용자 시나리오를 시뮬레이션하는 E2E 테스트
+   ```python
+   def test_user_scenario():
+       """사용자 시나리오 E2E 테스트"""
+       # 1. 최신 세금 정책 검색
+       # 2. 시간 가중치 파라미터 조정
+       # 3. 결과 비교 및 검증
+       # (구현 생략)
+       pass
+   ```

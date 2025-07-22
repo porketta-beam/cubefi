@@ -1,0 +1,83 @@
+# Task ID: 6
+# Title: 세금 계산기 Python 모듈 개발
+# Status: deferred
+# Dependencies: None
+# Priority: medium
+# Description: 국세청 세율 표를 기반으로 종합과세·ISA·연금저축 시나리오별 세후 수익률을 결정론적으로 계산하는 엔진을 구현하고, LangChain-Agent가 호출할 수 있도록 RAG 체인에 도구(StructuredTool) 형태로 통합한다.
+# Details:
+구현 위치 변경 및 모듈 구조 통합
+• api/services/tax_calculator.py
+    – 세율 테이블 상수화(국세청 기준)
+    – calc(input:TaxCalcInput) -> TaxCalcOutput  : 종합과세·ISA·연금저축 로직
+• api/models/tax_models.py
+    – TaxCalcInput(BaseModel): income:int, invest:int, product:str, horizon:int
+    – TaxCalcOutput(BaseModel): after_tax_return:Decimal, saved_tax:Decimal, breakdown:dict[str, Decimal]
+• api/services/tax_tools.py
+    – TaxCalcTool(StructuredTool) : 위 calc 함수 래핑, Agent 호출 인터페이스 제공
+• rag_config_service.py
+    – 기존 RAG 검색 체인 + TaxCalcTool 를 Agent 하나로 통합, 스트리밍 응답 유지
+
+
+# Test Strategy:
+pytest 단위 테스트: 국세청 공식 예시와 동일한 세액·세후수익률 산출(assert Decimal('0.1543'))
+pytest-asyncio 통합 테스트: FastAPI 엔드포인트 → RAG+TaxCalc Agent 호출 시 JSON 스트리밍 응답 검증
+coverage-xml 기준 95% 이상
+
+# Subtasks:
+## 1. 세금 계산 엔진 개발 [pending]
+### Dependencies: None
+### Description: 세율 테이블 상수화(국세청 기준) 및 핵심 계산 로직(종합과세, ISA, 연금저축)을 구현한다.
+### Details:
+파일: api/services/tax_calculator.py
+• TAX_BRACKETS 딕셔너리/튜플 리스트로 세율, 누진공제액 정의
+• def calc(input:TaxCalcInput) -> TaxCalcOutput:
+      – 각 상품타입별 과세 방식 분기
+      – horizon<=0, 음수 투자금 등 예외 처리
+      – Decimal 사용해 반올림 오차 방지
+• breakdown 필드에 구간별 세액·세후금액 포함
+
+## 2. Pydantic 데이터 모델 정의 [pending]
+### Dependencies: 6.1
+### Description: 입력 모델(소득, 투자금액, 상품타입, 투자기간)과 출력 모델(세후수익률, 절약세액, 세부계산내역)을 정의한다.
+### Details:
+파일: api/models/tax_models.py
+class TaxCalcInput(BaseModel):
+    income:int
+    invest:int
+    product:str  # 'composite'|'isa'|'pension'
+    horizon:int  # 년
+class TaxCalcOutput(BaseModel):
+    after_tax_return:Decimal
+    saved_tax:Decimal
+    breakdown:dict[str, Decimal]
+
+## 3. LangChain Tool 통합 [pending]
+### Dependencies: 6.2
+### Description: StructuredTool 래퍼 클래스를 구현하여 계산 엔진을 LangChain Agent에서 호출 가능하도록 한다.
+### Details:
+파일: api/services/tax_tools.py
+TaxCalcTool = StructuredTool.from_function(
+    name='tax_calculator',
+    description='국세청 기준 세금 계산기',
+    func=calc,
+    args_schema=TaxCalcInput,
+    return_schema=TaxCalcOutput,
+)
+
+## 4. RAG Chain에 Agent 통합 [pending]
+### Dependencies: 6.3
+### Description: rag_config_service.py를 수정하여 RAG 검색 체인과 TaxCalcTool을 하나의 Agent로 통합하고 스트리밍 응답을 유지한다.
+### Details:
+• RunnableWithMessageHistory → AgentExecutor 변경
+• Tools=[TaxCalcTool, retriever_tool] 로 등록
+• StreamingStdOutCallbackHandler 사용해 스트리밍 유지
+• 기존 기능 회귀 테스트 포함
+
+## 5. 통합 테스트 및 검증 [pending]
+### Dependencies: 6.4
+### Description: 단위 테스트(계산 정확성)와 통합 테스트(챗봇 응답)를 포함하여 전체 기능을 검증하고 95% 이상 커버리지를 달성한다.
+### Details:
+• pytest-cov 설정
+• FastAPI TestClient로 /chat POST → 세금 계산 + RAG 답변 시나리오 검증
+• 국세청 PDF 예제값 대비 오차 ±1원 이내
+

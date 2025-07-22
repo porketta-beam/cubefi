@@ -1,0 +1,15 @@
+=== API Test Results ===
+Document Status: 200
+Status Response: {
+  "db_exists": true,
+  "document_count": 650,
+  "db_path": "C:\\Users\\JS\\DEV\\cubefi\\rag_lab\\server\\chroma_db",
+  "embedding_model": "text-embedding-3-large",
+  "files_in_db": [
+    "original.pdf"
+  ]
+}
+
+RAG Chat: 200
+RAG Response Text: {"answer":"This document outlines the procedures and requirements for non-residents to apply for tax exemptions or reductions on domestic source income under tax treaties. It specifies the necessary application forms and supporting documents that must be submitted to the income payer and the tax office. Additionally, it includes regulations regarding the handling of tax deduction and credit certification documents, emphasizing confidentiality and the legal implications for unauthorized disclosure. The document also lists specific types of deductions and the documentation required to substantiate them.","contexts":["에 따른 국내원천 사업소득은 제외한다)의 실질귀속자인 비거주자가 조세조약에 따라 비과세 또는 면제를 적용받으\n려는 경우에는 대통령령으로 정하는 바에 따라 비과세ㆍ면제신청서 및 국내원천소득의 실질귀속자임을 증명하는 서\n류(이하 이 조에서 “신청서등”이라 한다)를 국내원천소득을 지급하는 자(이하 이 조에서 “소득지급자”라 한다)에게\n제출하고, 해당 소득지급자는 그 신청서등을 납세지 관할 세무서장에게 제출하여야 한다. <개정 2018. 12. 31., 2022.\n12. 31., 2024. 12. 31.>\n② 제1항을 적용할 때 해당 국내원천소득이 국외투자기구를 통하여 지급되는 경우에는 그 국외투자기구가 대통령\n령으로 정하는 바에 따라 실질귀속자로부터 신청서등을 제출받아 이를 그 명세가 포함된 국외투자기구 신고서와\n함께 소득지급자에게 제출하고 해당 소득지급자는 그 신고서와 신청서등을 납세지 관할 세무서장에게 제출하여야\n한다.<개정 2018. 12. 31., 2022. 12. 31.>","2014. 1. 1., 2020. 12. 29.>\n② 제1항에 따라 소득공제 및 세액공제 증명서류를 받은 자는 이를 타인에게 제공하거나, 과세목적 외의 용도로 사\n용하거나, 그 내용을 누설해서는 아니 된다.<개정 2014. 1. 1.>\n③ 제1항에 따라 소득공제 및 세액공제 증명서류를 받아 그 내용을 알게 된 자 중 공무원이 아닌 자는 「형법」이나\n그 밖의 법률에 따른 벌칙을 적용할 때 공무원으로 본다.<개정 2014. 1. 1.>","1. 인적공제, 연금보험료공제, 주택담보노후연금 이자비용공제, 특별소득공제, 자녀세액공제, 연금계좌세액공제 및\n특별세액공제 대상임을 증명하는 서류로서 대통령령으로 정하는 것\n2. 종합소득금액 계산의 기초가 된 총수입금액과 필요경비의 계산에 필요한 서류로서 대통령령으로 정하는 것\n3. 사업소득금액을 제160조 및 제161조에 따라 비치ㆍ기록된 장부와 증명서류에 의하여 계산한 경우에는 기업회계\n기준을 준용하여 작성한 재무상태표ㆍ손익계산서와 그 부속서류, 합계잔액시산표(合計殘額試算表) 및 대통령령"],"model_used":"gpt-4o-mini","search_params":{"search_type":"similarity","k":3,"temperature":0.0}}
+SUCCESS: RAG API is working!

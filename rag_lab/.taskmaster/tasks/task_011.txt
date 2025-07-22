@@ -1,0 +1,137 @@
+# Task ID: 11
+# Title: 프로젝트 디렉터리 재설계 및 server 모듈 마이그레이션
+# Status: done
+# Dependencies: 8, 9
+# Priority: high
+# Description: 기존 rag_lab 개발 구조(auto_rag 포함)는 그대로 유지하면서, 팀 배포용으로 완전히 독립적인 server 모듈을 추가한다. server 모듈은 오직 FastAPI 백엔드만 제공하며, 프론트엔드는 별도(Next.js/Streamlit) 애플리케이션에서 API·WebSocket 형태로 접근한다.
+# Details:
+핵심 변경점
+1. 기존 소스는 건드리지 않는다.
+2. rag_lab/server/ 이하에 배포 전용 모듈을 구성한다.
+3. auto_rag 코드와 공용 유틸을 server/modules 로 ‘복사’(rsync) 하여 독립 패키지화한다.
+4. server 내 모든 import 는 server.*** 또는 상대경로로 정리해 외부 의존을 제거한다.
+5. server/main.py 는 FastAPI 백엔드만 실행한다(uvicorn).
+6. CORS 미들웨어를 추가하여 외부 도메인(프론트엔드) 접근을 허용한다.
+7. 팀원은 server/ 폴더만 받아서 `PYTHONPATH=. python main.py` 로 즉시 실행 가능해야 한다.
+
+# Test Strategy:
+1. 정적 검사
+   cd server && ruff check . && mypy modules api
+   → ModuleNotFound / import cycle 0건
+
+2. 독립 실행 확인
+   cd server && PYTHONPATH=. python main.py &
+   → http://localhost:8000/health 200 OK
+   → 응답 헤더 Access-Control-Allow-Origin: * 확인
+
+3. 원본 개발 환경 회귀
+   cd .. && poetry run pytest
+   → 기존 Task 8·9 테스트 100% 통과
+
+4. Docker-Compose
+   docker-compose -f deploy/docker-compose.yml up -d
+   → 컨테이너 내부에서 server/main.py 자동 기동, 로그 에러 0
+
+5. 패키징 테스트
+   tar -czf server.tgz server && mkdir /tmp/test && cd /tmp/test && tar -xzf ~/server.tgz
+   PYTHONPATH=. python server/main.py → 모든 API 엔드포인트 정상 동작
+
+# Subtasks:
+## 1. server 폴더 및 하위 구조 생성 [done]
+### Dependencies: None
+### Description: rag_lab 루트에 server 폴더를 만들고 raw_data, chroma_db, api, modules, web 디렉터리를 생성한다.
+### Details:
+mkdir -p server/{raw_data,chroma_db,api,modules,web} && touch server/__init__.py
+
+## 2. 기존 auto_rag 코드 server/modules 로 복사하여 독립성 확보 [done]
+### Dependencies: 11.1
+### Description: auto_rag 디렉터리 전체를 server/modules 로 ‘복사’하고, 원본은 그대로 두어 개발 환경을 유지한다.
+### Details:
+rsync -a auto_rag/ server/modules/ --exclude tests
+복사 후 server/modules/__init__.py 에 패키지 초기화 코드만 추가하고 shim 은 두지 않는다.
+
+## 3. server 내부 import 및 실행 스크립트 일괄 수정 [done]
+### Dependencies: 11.2
+### Description: server 폴더 안에서만 auto_rag → server.modules 로 import 경로를 치환하고 외부 참조를 제거한다.
+### Details:
+grep -Rl "auto_rag" server | xargs sed -i 's/auto_rag/server.modules/g'
+하드코딩된 상대경로, 환경 변수 등을 server 기준으로 수정한다.
+
+## 4. main.py FastAPI 런처 구현 [done]
+### Dependencies: 11.3
+### Description: server/main.py 하나로 FastAPI API만 실행하도록 uvicorn 런처 및 CORS 설정을 추가한다.
+### Details:
+main.py 예시
+    from fastapi import FastAPI
+    from fastapi.middleware.cors import CORSMiddleware
+
+    app = FastAPI(title="Tax RAG API")
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    @app.get("/health")
+    async def health():
+        return {"status": "ok"}
+
+    if __name__ == "__main__":
+        import uvicorn
+        uvicorn.run("server.api.main:app", host="0.0.0.0", port=8000)
+
+<info added on 2025-07-20T19:45:30.930Z>
+업데이트 내역  
+• Streamlit 관련 파일·requirements·Docker layer 전부 삭제 완료  
+• server/modules/fastapi_app.py  
+    from fastapi import FastAPI  
+    from fastapi.middleware.cors import CORSMiddleware  
+
+    app = FastAPI(title="Tax RAG API")  
+    app.add_middleware(  
+        CORSMiddleware,  
+        allow_origins=["*"],  
+        allow_credentials=True,  
+        allow_methods=["*"],  
+        allow_headers=["*"],  
+    )  
+
+    @app.get("/health")  
+    async def health():  
+        return {"status": "ok"}  
+
+• server/main.py  
+    def run():  
+        import uvicorn  
+        uvicorn.run("server.modules.fastapi_app:app", host="0.0.0.0", port=8000)  
+
+    if __name__ == "__main__":  
+        run()  
+
+• poetry [tool.poetry.scripts] 섹션에 ‘tax-rag-api = "server.main:run"’ 추가 → `poetry run tax-rag-api` 로 단일 포트(8000) 기동  
+• CI 테스트: httpx.AsyncClient 로 GET /health → 200 & {"status":"ok"} 확인
+</info added on 2025-07-20T19:45:30.930Z>
+
+## 5. server 전용 패키징 및 CI 설정 [done]
+### Dependencies: 11.4
+### Description: server/ 폴더에 독립 pyproject.toml 또는 requirements.txt를 두고 GitHub Actions 워크플로우를 추가한다.
+### Details:
+server/pyproject.toml 에 include = ["server"] 설정, dependency 목록에서 streamlit 제거
+.github/workflows/server.yml → cd server && poetry install && pytest 단계 추가
+
+## 6. 문서 및 README, 배포 가이드 작성 [done]
+### Dependencies: 11.5
+### Description: README에 server 모듈 사용법을 추가하고 docs/server_migration.md에 복사 전략·import 변경·실행 방법 등을 기록한다.
+### Details:
+PlantUML 구조도(개발 vs 배포) 삽입, ‘server만 전달’ 절차와 환경 변수(.env.sample) 설명 작성
+
+## 7. 문서 업데이트: Streamlit 관련 내용 제거 및 CORS 설명 추가 [done]
+### Dependencies: 11.6
+### Description: 기존 배포 문서와 README에서 Streamlit/웹 실행 섹션을 삭제하고, 외부 프론트엔드와의 API·WebSocket 사용 예시 및 CORS 설정 방법을 반영한다.
+### Details:
+docs/server_migration.md, README.md 에서 8501 포트·Streamlit 언급 제거
+`curl` 예시, Next.js fetch 예시 추가
+개발/운영 환경에서 ALLOWED_ORIGINS 설정 방법 명시
+

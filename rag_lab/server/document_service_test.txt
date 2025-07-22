@@ -1,0 +1,3 @@
+=== DocumentService Test ===
+Status: {'db_exists': True, 'document_count': 650, 'db_path': 'C:\\Users\\JS\\DEV\\cubefi\\rag_lab\\server\\chroma_db', 'embedding_model': 'text-embedding-3-large', 'files_in_db': ['original.pdf']}
+DB Manager Status: {'db_exists': True, 'db_loaded': True, 'document_count': 650, 'db_path': 'C:\\Users\\JS\\DEV\\cubefi\\rag_lab\\server\\chroma_db', 'embedding_model': 'text-embedding-3-large'}

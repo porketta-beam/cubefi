@@ -1,0 +1,137 @@
+# Task ID: 15
+# Title: 통합 실행 시스템 개발
+# Status: deferred
+# Dependencies: 11
+# Priority: medium
+# Description: 루트 디렉토리에 main.py 실행 파일을 생성하여 FastAPI(uvicorn) 서버를 실행하고, 서버 상태를 모니터링하며 안전한 종료 및 장애 복구를 보장하는 실행 시스템을 개발한다.
+# Details:
+## 구현 세부사항
+
+1. **실행 파일(main.py) 구조**
+   - 루트 디렉토리에 `main.py` 생성. 서버 프로세스만을 관리하며 웹(Next.js) 관련 코드는 포함하지 않는다.
+   - 핵심 함수
+     - `start_server(port: int, debug: bool=False)` : FastAPI 서버를 `subprocess.Popen` 으로 기동하고 `/health` 가 200 을 반환할 때까지 폴링(최대 30초).
+     - `stop_service()` : 서버 프로세스 정상 종료·강제 종료 로직.
+     - `check_service_health()` : 프로세스 종료 여부 및 `/health` 응답 코드로 서버 상태를 판단.
+     - `restart_service()` : 장애 감지 시 자동 재기동.
+     - `signal_handler()` : SIGINT / SIGTERM 수신 시 안전 종료.
+   - CLI 인자
+     - `--server-port`(기본 8000), `--debug`, `--monitor-interval` 만 지원. `--mode`, `--web-port` 등 웹 관련 옵션 제거.
+   - 예시 명령: `python main.py --server-port 9000 --debug`.
+
+2. **환경 변수 설정 파일(.env.example)**
+   ```ini
+   # 서버 설정
+   SERVER_PORT=8000
+   LOG_LEVEL=info
+   
+   # 데이터베이스 설정
+   DB_HOST=localhost
+   DB_PORT=5432
+   DB_USER=postgres
+   DB_PASSWORD=postgres
+   DB_NAME=rag_lab
+   
+   # Redis 설정
+   REDIS_HOST=localhost
+   REDIS_PORT=6379
+   
+   # Chroma 설정
+   CHROMA_HOST=localhost
+   CHROMA_PORT=8001
+   ```
+   - WEB_PORT, NEXT_PUBLIC_API_URL 등 프론트엔드 변수 제거.
+
+3. **실행 스크립트**
+   - `run.sh` / `run.bat` 는 `python main.py "$@"` 만 호출한다. 추가 변경 없음.
+
+4. **서버 상태 확인 엔드포인트 보강**
+   - `server/main.py` 에 `/health`, `/health/detailed` 구현(프론트엔드 제거와 무관).
+
+5. **에러 처리 및 복구 메커니즘**
+   - `restart_service()` 를 통해 서버 장애(프로세스 종료, 헬스체크 실패) 발생 시 자동 재시작.
+
+6. **로깅 시스템 강화**
+   - `setup_logging()` : 콘솔, `rag_lab.log`, `rag_lab_structured.log`(JSON) 순환 로그 설정. 웹 태그 제거.
+
+7. **의존성 관리**
+   ```toml
+   [tool.poetry.dependencies]
+   python = "^3.9"
+   requests = "^2.31.0"
+   psutil = "^5.9.5"
+   ```
+
+# Test Strategy:
+## 테스트 전략
+
+1. **단위 테스트**
+   - `tests/test_main.py` 에서 다음 함수들을 모킹하여 검증:
+     - `start_server`, `stop_service`, `check_service_health`, `restart_service`
+   - 웹 관련 테스트 항목(`start_web`, `WEB_PORT` 등) 제거.
+
+2. **통합 테스트**
+   - 실제 서버만 기동하여 `/health` 상태를 확인 후 SIGINT 로 종료.
+   ```python
+   @pytest.mark.integration
+   def test_server_start_stop():
+       proc = subprocess.Popen([
+           "python", "main.py", "--server-port", "8001"
+       ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+       try:
+           time.sleep(5)
+           res = requests.get("http://localhost:8001/health")
+           assert res.status_code == 200 and res.json()["status"] == "ok"
+       finally:
+           proc.send_signal(signal.SIGINT)
+           proc.wait(timeout=10)
+   ```
+
+3. **시스템 테스트**
+   - 기본 실행: `python main.py`
+   - 디버그 모드: `python main.py --debug`
+   - 포트 변경: `python main.py --server-port 9000`
+   - 각 실행 시 로그, 종료 신호 처리, 장애 재시작 로직 확인.
+
+4. **에러 처리 테스트**
+   - 이미 사용 중인 포트로 실행, 프로세스 강제 종료 등 시나리오에서 자동 복구 동작 검증.
+
+5. **로그 검증 & 성능 테스트**
+   - 로그 파일 생성·순환 및 24시간 이상 장기 실행 중 메모리 누수 여부 확인.
+
+# Subtasks:
+## 1. main.py 통합 실행 파일 설계 및 구현 [pending]
+### Dependencies: None
+### Description: 루트 디렉토리에 main.py 파일을 생성하여 FastAPI(uvicorn) 서버를 실행하고, 프로세스 관리·신호 처리·상태 모니터링·안전한 종료·자동 복구 로직을 포함한다.
+### Details:
+subprocess, signal, threading, requests 등을 이용해 서버 프로세스를 관리하고, /health 엔드포인트 폴링(최대 30초)으로 준비 여부를 확인한다. 종료 신호(SIGINT, SIGTERM) 수신 시 child.terminate() 후 5초 대기, 미종료 시 kill()로 강제 종료한다.
+<info added on 2025-07-19T13:07:22.158Z>
+• 실행 진입점(run.py)이 아닌 main.py 로 통일한다.
+• 서버 실행 명령은 .env 또는 CLI 인자로 주입 가능하도록 한다 (예: SERVER_CMD="uvicorn server.api.main:app --host 0.0.0.0 --port 8000").
+• tests/run_test.py: pytest 에서 main.py 를 subprocess 로 띄운 뒤 /health, /docs 응답 확인 후 SIGINT 전송 → 하위 PID 소멸 검증.
+</info added on 2025-07-19T13:07:22.158Z>
+
+## 2. 환경 변수 및 실행 스크립트 구성 [pending]
+### Dependencies: 15.1
+### Description: .env.example 파일을 루트에 생성하여 서버, 데이터베이스, Redis, Chroma 등 주요 환경 변수를 정의하고, run.sh 및 run.bat 실행 스크립트를 추가한다.
+### Details:
+.env.example 에 SERVER_PORT, DB_HOST 등의 필수 환경 변수와 예시 값을 명시한다. run.sh(run.bat)는 main.py 를 실행하도록 작성하며 Linux/macOS 에서는 실행 권한을 부여한다.
+
+## 3. 서버 헬스체크 및 상세 상태 엔드포인트 보강 [pending]
+### Dependencies: 15.1
+### Description: FastAPI 서버에 /health 및 /health/detailed 엔드포인트를 구현하여 API, 데이터베이스, Redis, Chroma 등 주요 컴포넌트의 상태를 반환한다.
+### Details:
+server/main.py 에 각 컴포넌트의 연결 상태를 점검하는 로직을 추가하고, 정상/오류/미확인 상태를 구분하여 JSON 형태로 응답한다.
+
+## 4. 에러 감지 및 자동 복구 메커니즘 구현 [pending]
+### Dependencies: 15.1, 15.3
+### Description: 서버 장애(프로세스 종료, 헬스체크 실패) 감지 시 자동으로 서버를 재시작하는 로직을 main.py 에 추가한다.
+### Details:
+check_service_health 함수에서 비정상 상태 감지 시 stop_service 및 restart_service 를 호출하여 자동 복구를 시도한다.
+
+## 5. 구조화된 로깅 및 로그 파일 순환 시스템 구축 [pending]
+### Dependencies: 15.1
+### Description: RotatingFileHandler와 JSON 포맷터를 활용하여 일반 로그와 구조화된 로그를 rag_lab.log, rag_lab_structured.log 파일에 기록하고, 로그 파일 용량 초과 시 자동 순환되도록 한다.
+### Details:
+setup_logging 함수를 구현하여 콘솔, 일반 파일, JSON 파일 핸들러를 등록하고, 로그 레벨 및 포맷을 일관되게 관리한다.
+

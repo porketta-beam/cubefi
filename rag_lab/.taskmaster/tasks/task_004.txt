@@ -1,0 +1,19 @@
+# Task ID: 4
+# Title: RAG 검색 체인 구성
+# Status: done
+# Dependencies: None
+# Priority: medium
+# Description: LangChain StuffDocumentsChain 을 이용해 검색→응답 파이프라인을 생성하고 citations 메타데이터를 유지한다.
+# Details:
+• poetry add langchain-openai==0.2
+• rag_chain.py
+    retriever = vectordb.as_retriever(search_kwargs={"k":4})
+    llm = ChatOpenAI(model_name="gpt-4o-mini",temperature=0.2)
+    chain = (RunnableWithMessageHistory(
+        StuffDocumentsChain(llm=llm,retriever=retriever),
+        memory=RedisSessionMemory()))
+    chain = chain.with_config(tags=["rag","tax"],callbacks=[langsmith_tracer])
+• output_parser 에 citation_index 삽입
+
+# Test Strategy:
+로컬 함수 호출로 "ISA 세금 면제 한도?" 질의 → chain 반환 dict 에 "citations" 리스트 길이>0 검증

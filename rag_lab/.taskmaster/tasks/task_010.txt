@@ -1,0 +1,14 @@
+# Task ID: 10
+# Title: OpenAPI 문서 검수 및 전면 단위 테스트 보강
+# Status: pending
+# Dependencies: 2, 6, 7, 9
+# Priority: medium
+# Description: FastAPI 자동 스키마를 검토하고 pydantic 모델 예제 추가, pytest 에서 모든 라우트 케이스를 커버 후 CI 배지 표시.
+# Details:
+• main.py 에 app = FastAPI(openapi_tags=[...])
+• 각 모델 Config.model_config["json_schema_extra"] 로 example 삽입
+• pytest-cov 및 fastapi-testclient 로 /chat,/history,/evaluate 표준 시나리오 작성
+• README.md 에 coverage badge, docs url 명시
+
+# Test Strategy:
+pytest-cov 90% 기준을 GH Actions에서 강제, schemathesis 로 openapi.yaml fuzz => 0 error 통과

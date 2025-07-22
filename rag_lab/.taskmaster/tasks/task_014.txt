@@ -1,0 +1,139 @@
+# Task ID: 14
+# Title: 문서 관리 API 리팩토링 및 엔드포인트 구조 개선
+# Status: done
+# Dependencies: 11, 12
+# Priority: medium
+# Description: api/documents 라우트의 엔드포인트를 RESTful 원칙에 맞게 리팩토링하고, config POST 추가, 업로드/삭제/동기화 기능 개선, 불필요한 엔드포인트 제거를 수행한다.
+# Details:
+1. 엔드포인트 설계 및 리팩토링: RESTful 원칙에 따라 HTTP 메서드와 리소스 명명 규칙을 일관성 있게 적용한다. 예를 들어, /api/documents/{doc_id}/config는 POST로 설정 저장, /api/documents/upload-file은 파일 업로드, /api/documents/{doc_id}/delete는 삭제 등으로 명확히 구분한다. 불필요한 엔드포인트(/api/rag/chat, generate-questions, evaluate)는 완전히 제거한다.
+
+2. config POST 엔드포인트 추가: /api/documents/{doc_id}/config에 POST 요청 시, body로 chunk_size와 chunk_overlap을 받아 해당 문서별 config.json에 저장한다. 유효성 검사를 강화하여 잘못된 값(예: overlap > size 등)에 대해 422 에러를 반환한다.
+
+3. upload-file 엔드포인트 개선: chunk 파라미터를 제거하고, 업로드 시 server/raw_data/{doc_id} 디렉터리를 자동 생성한다. PDF와 TXT 파일만 허용하며, 파일 확장자 및 MIME 타입 검사를 추가한다. 업로드 성공 시 201 Created와 Location 헤더에 doc_id를 반환한다.
+
+4. delete 엔드포인트 개선: 삭제는 raw_data 폴더 내에서만 동작하도록 제한하고, 존재하지 않는 파일/폴더 삭제 시 404, 권한 문제 등 예외 상황에 대해 명확한 에러 메시지와 HTTP 상태 코드를 반환한다.
+
+5. sync 엔드포인트 GET 방식으로 변경: 동기화 작업은 GET /api/documents/{doc_id}/sync?force=true 등 파라미터 기반으로 동작하도록 변경한다. 파라미터 유효성 검사 및 동기화 결과를 JSON으로 반환한다.
+
+6. 코드 구조: server/api/documents.py와 server/modules/document_service.py로 라우트와 서비스 로직을 분리한다. 모든 예외는 FastAPI의 HTTPException을 활용해 일관된 에러 응답 포맷을 유지한다.
+
+7. 문서화 및 버전 관리: 엔드포인트 변경 및 제거 내역을 changelog에 기록하고, OpenAPI 문서에 반영한다. 기존 클라이언트 호환성에 유의하며, 변경된 엔드포인트에 대한 명확한 안내를 제공한다.
+
+8. 테스트: 단위 테스트와 통합 테스트를 강화하여 모든 주요 시나리오(정상/에러/경계값)를 커버한다. pytest 및 FastAPI TestClient를 활용한다.
+
+참고: 엔드포인트 설계와 리팩토링 시 일관성, 명확한 네이밍, HTTP 상태 코드 및 에러 메시지 표준화, 버전 관리, 문서화 등 최신 REST API 베스트 프랙티스를 준수한다[1][3][4].
+
+# Test Strategy:
+1. 단위 테스트: pytest로 각 엔드포인트별 정상/에러 케이스(유효성 검사, 파일 업로드/삭제, config 저장, sync 동작 등)를 테스트한다. 2. 통합 테스트: FastAPI TestClient로 실제 파일 업로드/삭제/설정/동기화 플로우를 검증한다. 3. 에러 처리 테스트: 잘못된 파라미터, 미지원 파일, 없는 문서/폴더 등 예외 상황에서 올바른 HTTP 상태 코드와 메시지가 반환되는지 확인한다. 4. OpenAPI 문서 검증: 변경된 엔드포인트가 문서화되어 있고, 예제 및 설명이 최신 상태인지 확인한다. 5. 엔드포인트 제거 검증: 삭제된 엔드포인트 호출 시 404 또는 적절한 에러가 반환되는지 테스트한다.
+
+# Subtasks:
+## 1. RESTful 엔드포인트 구조 설계 및 불필요한 엔드포인트 제거 [done]
+### Dependencies: None
+### Description: api/documents 라우트의 모든 엔드포인트를 RESTful 원칙에 따라 명확하게 재설계하고, 불필요한 엔드포인트(/api/rag/chat, generate-questions, evaluate 등)를 완전히 제거한다.
+### Details:
+HTTP 메서드와 리소스 명명 규칙을 일관성 있게 적용하며, 엔드포인트는 명확한 명사 기반 경로로 구성한다. 엔드포인트 변경 및 제거 내역을 changelog에 기록한다.
+<info added on 2025-07-19T13:06:07.458Z>
+POST /api/documents/{doc_id}/config 엔드포인트 상세 설계
+
+• Request
+  - Content-Type: application/json
+  - Body 스키마
+    {
+      "chunk_size": int,        // 100-2000 범위
+      "chunk_overlap": int      // 0 ≤ overlap < chunk_size
+    }
+  - 필드 누락, 타입 불일치, 범위 초과 시 422 ValidationError 반환
+  - 오타 호환성: “chunk_overlab” 키가 들어오면 chunk_overlap 에 매핑하여 처리
+
+• Service 로직
+  1. RAW_DATA_DIR / {doc_id} 경로가 없으면 404, 존재하지 않으면 201 시 자동 생성
+  2. save_config(doc_id, chunk_size, chunk_overlap, *, overwrite: bool = False)
+     - 이미 config.json 존재 시 overwrite 파라미터가 false 이면 409, true 이면 덮어씀
+     - json.dump({"chunk_size":…, "chunk_overlap":…}, fp, ensure_ascii=False, indent=2)
+  3. 성공 시 201 Created + {"doc_id": ..., "chunk_size": ..., "chunk_overlap": ...}
+
+• 테스트 케이스
+  a. 정상 입력(800/200) → 201
+  b. chunk_overlap ≥ chunk_size → 422
+  c. 음수 또는 0 chunk_size → 422
+  d. 존재하지 않는 doc_id → 404
+  e. 중복 저장 overwrite=false → 409, overwrite=true → 201
+
+• 추가 작업
+  - OpenAPI 예제 및 설명 업데이트
+  - 변경 내역을 changelog.md 에 “ADD /api/documents/{doc_id}/config” 항목으로 기록
+  - upload-file, sync 엔드포인트와 연동되는 chunk 파라미터 제거 사항을 문서화하여 호환성 이슈 방지
+</info added on 2025-07-19T13:06:07.458Z>
+
+## 2. Config POST 엔드포인트 구현 및 유효성 검사 강화 [done]
+### Dependencies: 14.1
+### Description: /api/documents/{doc_id}/config에 POST 요청 시 chunk_size, chunk_overlap 값을 받아 config.json에 저장하고, 유효성 검사(예: overlap > size 등)를 강화한다.
+### Details:
+body로 전달된 파라미터를 검증하여 잘못된 값에 대해 422 에러를 반환하고, 정상 입력 시 해당 문서별 config.json 파일에 저장한다.
+
+## 3. 파일 업로드 엔드포인트 개선 및 파일 검증 로직 추가 [done]
+### Dependencies: 14.1
+### Description: 파일 업로드 시 chunk 파라미터를 제거하고, server/raw_data/{doc_id} 디렉터리 자동 생성, PDF/TXT 파일만 허용, 확장자 및 MIME 타입 검증을 추가한다.
+### Details:
+업로드 성공 시 201 Created와 Location 헤더에 doc_id를 반환하며, 미지원 파일 업로드 시 적절한 에러 메시지와 상태 코드를 반환한다.
+<info added on 2025-07-19T13:06:28.475Z>
+• /api/documents/upload-file 엔드포인트는 multipart/form-data의 file 필드만 수신하도록 수정한다. 추가 파라미터(chunk_size, chunk_overlap)는 허용하지 않으며, 전달될 경우 422 Unprocessable Entity로 응답한다.  
+• 업로드 처리 로직  
+  1) server/raw_data 디렉터리가 존재하지 않으면 우선 생성한다.  
+  2) 업로드 요청이 들어오면 UUID4로 doc_id를 생성하고 server/raw_data/{doc_id} 하위에 디렉터리를 만든다.  
+  3) 파일 확장자(.pdf, .txt)와 MIME 타입(application/pdf, text/plain)을 모두 검사해 일치할 때만 저장한다.  
+  4) 저장 경로: server/raw_data/{doc_id}/{original_filename}  
+• 성공 시 응답  
+  – HTTP 201 Created  
+  – Location: /api/documents/{doc_id}  
+  – Body: {"doc_id": "<생성된 id>", "file_name": "<업로드된 파일명>"}  
+• 실패 시 응답  
+  – 파일 미첨부: 400 Bad Request {"detail": "file field is required"}  
+  – 지원하지 않는 형식: 415 Unsupported Media Type {"detail": "Only PDF and TXT files are allowed"}  
+  – 기타 서버 오류: 500 Internal Server Error  
+• 테스트 추가  
+  – pdf, txt 정상 업로드 → 201 & Location 헤더, raw_data/{doc_id} 디렉터리와 파일 존재 확인  
+  – 다른 확장자(jpg 등) 업로드 → 415  
+  – chunk_size 파라미터 포함 요청 → 422
+</info added on 2025-07-19T13:06:28.475Z>
+
+## 4. 삭제 및 동기화 엔드포인트 개선 [done]
+### Dependencies: 14.1
+### Description: 삭제 엔드포인트는 raw_data 폴더 내에서만 동작하도록 제한하고, sync 엔드포인트는 GET 방식으로 변경하여 파라미터 기반 동작 및 결과 JSON 반환을 구현한다.
+### Details:
+존재하지 않는 파일/폴더 삭제 시 404, 권한 문제 등 예외 상황에 대해 명확한 에러 메시지와 HTTP 상태 코드를 반환한다. sync는 force 등 파라미터 유효성 검사를 포함한다.
+<info added on 2025-07-19T13:06:55.037Z>
+• DELETE /api/documents/delete  
+  – raw_data 디렉터리 내부 경로만 허용하도록 Path.resolve()로 절대경로 검사 후, 벗어나는 경우 403 Forbidden 반환  
+  – 요청한 파일명이 존재하지 않을 때 404 Not Found 대신  
+    { "detail": "file_not_found", "deletable_files": ["a.pdf", "b.docx", …] } 형태로 현재 삭제 가능한 파일 리스트를 함께 반환  
+  – 단일 파일뿐 아니라 files[]=a.pdf&files[]=b.pdf 형식의 다중 삭제 지원, 일부만 실패 시 207 Multi-Status로 개별 결과 제공  
+  – OS/권한 오류, 디렉터리 삭제 시도 등은 409 Conflict + 원인 메시지
+
+• GET /api/documents/sync  
+  – query string: chunk_size(int>0), chunk_overlap(int≥0), force(bool, default=false)  
+  – 미지정 시 doc별 config.json → 전역 DEFAULT_CHUNK_SIZE/OVERLAP 순으로 fallback  
+  – chunk_overlap ≥ chunk_size 일 경우 422 Unprocessable Entity  
+  – raw_data 하위 모든 문서를 지정된 파라미터로 split 후 embedding 수행  
+  – 응답 예시  
+    {  
+      "processed_docs": 12,  
+      "total_chunks": 487,  
+      "used_chunk_size": 800,  
+      "used_chunk_overlap": 200  
+    }
+
+• 테스트 시나리오 추가  
+  1) 삭제 엔드포인트: 존재하지 않는 파일 요청 → 404 & deletable_files 포함  
+  2) sync 엔드포인트:  
+     a. GET /sync?chunk_size=600&chunk_overlap=100 → 200 & used_* 필드 검증  
+     b. overlap≥size → 422  
+     c. 파라미터 미지정 → config.json 값 사용 여부 확인
+</info added on 2025-07-19T13:06:55.037Z>
+
+## 5. 코드 구조 분리, 문서화 및 테스트 강화 [done]
+### Dependencies: 14.2, 14.3, 14.4
+### Description: server/api/documents.py와 server/modules/document_service.py로 라우트와 서비스 로직을 분리하고, 모든 예외는 FastAPI HTTPException으로 처리하며, OpenAPI 문서 및 changelog를 최신화한다.
+### Details:
+엔드포인트 변경사항을 OpenAPI 문서에 반영하고, 단위/통합 테스트(pytest, TestClient)로 모든 주요 시나리오(정상/에러/경계값)를 커버한다.
+

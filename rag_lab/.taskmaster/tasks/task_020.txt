@@ -1,0 +1,456 @@
+# Task ID: 20
+# Title: LangGraph 기반 고급 RAG 파이프라인 구현
+# Status: pending
+# Dependencies: 18, 19
+# Priority: medium
+# Description: LangGraph를 활용하여 Reranking, 문서 컨텍스트 확장, 멀티쿼리, Self Query 등 고급 RAG 기능을 구현하고 기존 시스템에 통합한다.
+# Details:
+## 구현 세부사항
+
+1. **LangGraph 기반 RAG 파이프라인 설계 (`rag/pipelines/langgraph_rag.py`)**
+   - LangGraph 상태 관리 및 노드 구성
+   ```python
+   from langgraph.graph import StateGraph
+   from pydantic import BaseModel, Field
+   
+   class RAGState(BaseModel):
+       query: str
+       retrieved_documents: list = Field(default_factory=list)
+       reranked_documents: list = Field(default_factory=list)
+       expanded_context: str = ""
+       generated_queries: list = Field(default_factory=list)
+       final_answer: str = ""
+       feedback: dict = Field(default_factory=dict)
+   
+   def create_rag_graph(llm, retriever, reranker):
+       workflow = StateGraph(RAGState)
+       
+       # 노드 정의
+       workflow.add_node("query_analysis", query_analysis)
+       workflow.add_node("query_generation", generate_multiple_queries)
+       workflow.add_node("retrieval", retrieve_documents)
+       workflow.add_node("reranking", rerank_documents)
+       workflow.add_node("context_expansion", expand_document_context)
+       workflow.add_node("answer_generation", generate_answer)
+       
+       # 엣지 정의
+       workflow.add_edge("query_analysis", "query_generation")
+       workflow.add_edge("query_generation", "retrieval")
+       workflow.add_edge("retrieval", "reranking")
+       workflow.add_edge("reranking", "context_expansion")
+       workflow.add_edge("context_expansion", "answer_generation")
+       
+       # 조건부 엣지 (피드백 루프)
+       workflow.add_conditional_edges(
+           "answer_generation",
+           should_continue,
+           {
+               True: "query_generation",  # 불충분한 답변 시 쿼리 재생성
+               False: END
+           }
+       )
+       
+       return workflow.compile()
+   ```
+
+2. **멀티쿼리 생성 모듈 (`rag/components/multi_query.py`)**
+   - 원본 쿼리에서 다양한 관점의 하위 쿼리 생성
+   ```python
+   def generate_multiple_queries(state: RAGState, llm) -> RAGState:
+       """원본 쿼리에서 다양한 관점의 하위 쿼리 생성"""
+       prompt = PromptTemplate.from_template(
+           """원본 질문: {query}
+           
+           이 질문에 대한 정보를 검색하기 위해 서로 다른 관점에서 3-5개의 검색 쿼리를 생성하세요.
+           각 쿼리는 원본 질문의 다른 측면이나 관점을 다루어야 합니다.
+           
+           생성된 쿼리:"""
+       )
+       
+       response = llm.invoke(prompt.format(query=state.query))
+       queries = [q.strip() for q in response.split("\n") if q.strip()]
+       
+       return RAGState(
+           query=state.query,
+           generated_queries=queries
+       )
+   ```
+
+3. **Self Query 구현 (`rag/components/self_query.py`)**
+   - 쿼리 자체 분석 및 메타데이터 필터링 로직
+   ```python
+   def parse_self_query(state: RAGState, llm) -> dict:
+       """쿼리를 분석하여 메타데이터 필터 추출"""
+       prompt = PromptTemplate.from_template(
+           """질문: {query}
+           
+           이 질문에서 다음 메타데이터 필드에 대한 필터 조건을 추출하세요:
+           - 문서 유형 (법률, 판례, 세무 가이드 등)
+           - 날짜 범위 (예: 2020년 이후)
+           - 관련 법률 분야 (소득세법, 법인세법 등)
+           
+           JSON 형식으로 응답하세요:"""
+       )
+       
+       response = llm.invoke(prompt.format(query=state.query))
+       try:
+           filters = json.loads(response)
+           return filters
+       except:
+           return {}
+   ```
+
+4. **Reranking 모듈 (`rag/components/reranker.py`)**
+   - 검색된 문서 재순위화 로직
+   ```python
+   from sentence_transformers import CrossEncoder
+   
+   class CrossEncoderReranker:
+       def __init__(self, model_name="cross-encoder/ms-marco-MiniLM-L-6-v2"):
+           self.model = CrossEncoder(model_name)
+           
+       def rerank(self, query: str, documents: list) -> list:
+           """검색된 문서를 쿼리 관련성에 따라 재순위화"""
+           pairs = [[query, doc.page_content] for doc in documents]
+           scores = self.model.predict(pairs)
+           
+           # 점수와 문서를 결합하고 정렬
+           scored_docs = list(zip(scores, documents))
+           scored_docs.sort(key=lambda x: x[0], reverse=True)
+           
+           # 정렬된 문서 반환
+           return [doc for _, doc in scored_docs]
+   ```
+
+5. **문서 컨텍스트 확장 (`rag/components/context_expansion.py`)**
+   - 검색된 문서의 컨텍스트 확장 로직
+   ```python
+   def expand_document_context(state: RAGState, llm, retriever) -> RAGState:
+       """검색된 문서의 컨텍스트를 확장"""
+       expanded_docs = []
+       
+       for doc in state.reranked_documents[:3]:  # 상위 3개 문서만 처리
+           # 문서에서 키워드 추출
+           keywords_prompt = PromptTemplate.from_template(
+               """다음 텍스트에서 중요한 키워드 5개를 추출하세요:
+               {text}
+               
+               키워드:"""
+           )
+           keywords_text = llm.invoke(keywords_prompt.format(text=doc.page_content))
+           keywords = [k.strip() for k in keywords_text.split(",")]
+           
+           # 키워드로 추가 문서 검색
+           additional_docs = []
+           for keyword in keywords:
+               results = retriever.get_relevant_documents(keyword)
+               additional_docs.extend(results)
+           
+           # 중복 제거 및 원본 문서와 병합
+           unique_additional = [d for d in additional_docs if d.page_content != doc.page_content]
+           expanded_context = doc.page_content + "\n\n관련 컨텍스트:\n" + "\n\n".join([d.page_content for d in unique_additional[:2]])
+           
+           # 메타데이터 유지하면서 확장된 컨텍스트로 문서 업데이트
+           expanded_doc = Document(page_content=expanded_context, metadata=doc.metadata)
+           expanded_docs.append(expanded_doc)
+       
+       return RAGState(
+           query=state.query,
+           retrieved_documents=state.retrieved_documents,
+           reranked_documents=expanded_docs,
+           expanded_context="\n\n".join([d.page_content for d in expanded_docs])
+       )
+   ```
+
+6. **통합 API 엔드포인트 (`api/routes/advanced_rag.py`)**
+   - FastAPI 라우터에 고급 RAG 엔드포인트 추가
+   ```python
+   from fastapi import APIRouter, Depends
+   from pydantic import BaseModel
+   from rag.pipelines.langgraph_rag import create_rag_graph
+   
+   router = APIRouter(prefix="/api/advanced-rag", tags=["Advanced RAG"])
+   
+   class AdvancedRAGRequest(BaseModel):
+       query: str
+       use_multi_query: bool = True
+       use_reranking: bool = True
+       use_context_expansion: bool = True
+       use_self_query: bool = True
+   
+   class AdvancedRAGResponse(BaseModel):
+       answer: str
+       sources: list
+       reasoning_trace: list
+   
+   @router.post("/query", response_model=AdvancedRAGResponse)
+   async def advanced_rag_query(request: AdvancedRAGRequest):
+       # 컴포넌트 초기화
+       llm = get_llm()
+       retriever = get_retriever()
+       reranker = CrossEncoderReranker()
+       
+       # 그래프 생성
+       rag_graph = create_rag_graph(llm, retriever, reranker)
+       
+       # 초기 상태 설정
+       initial_state = RAGState(query=request.query)
+       
+       # 그래프 실행
+       result = rag_graph.invoke(initial_state)
+       
+       return AdvancedRAGResponse(
+           answer=result.final_answer,
+           sources=[{
+               "content": doc.page_content[:200] + "...",
+               "metadata": doc.metadata
+           } for doc in result.reranked_documents],
+           reasoning_trace=result.feedback.get("reasoning_trace", [])
+       )
+   ```
+
+7. **성능 평가 및 모니터링 (`rag/evaluation/advanced_metrics.py`)**
+   - 고급 RAG 파이프라인 성능 측정
+   ```python
+   def evaluate_advanced_rag(test_queries, ground_truth, rag_pipeline):
+       """고급 RAG 파이프라인 성능 평가"""
+       metrics = {
+           "accuracy": 0,
+           "retrieval_precision": 0,
+           "answer_relevance": 0,
+           "context_quality": 0
+       }
+       
+       for query, truth in zip(test_queries, ground_truth):
+           result = rag_pipeline.invoke({"query": query})
+           
+           # 정확도 평가
+           accuracy = calculate_answer_accuracy(result.final_answer, truth["answer"])
+           
+           # 검색 정밀도 평가
+           retrieval_precision = calculate_retrieval_precision(
+               result.retrieved_documents, 
+               truth["relevant_docs"]
+           )
+           
+           # 답변 관련성 평가
+           answer_relevance = calculate_answer_relevance(
+               query, 
+               result.final_answer
+           )
+           
+           # 컨텍스트 품질 평가
+           context_quality = calculate_context_quality(
+               result.expanded_context,
+               truth["ideal_context"]
+           )
+           
+           metrics["accuracy"] += accuracy
+           metrics["retrieval_precision"] += retrieval_precision
+           metrics["answer_relevance"] += answer_relevance
+           metrics["context_quality"] += context_quality
+       
+       # 평균 계산
+       for key in metrics:
+           metrics[key] /= len(test_queries)
+           
+       return metrics
+   ```
+
+8. **기존 시스템과의 통합**
+   - 기존 RAG 시스템에 고급 기능 통합
+   - 설정 기반 기능 활성화/비활성화 옵션 제공
+   ```python
+   # config.py에 설정 추가
+   ADVANCED_RAG_CONFIG = {
+       "use_langgraph": True,
+       "use_multi_query": True,
+       "use_reranking": True,
+       "use_context_expansion": True,
+       "use_self_query": True
+   }
+   ```
+
+9. **성능 최적화 및 캐싱**
+   - 멀티쿼리 결과 및 재순위화 결과 캐싱
+   - 비동기 처리를 통한 병렬 검색 최적화
+   ```python
+   async def retrieve_from_multiple_queries(queries: list, retriever) -> list:
+       """여러 쿼리에서 병렬로 문서 검색"""
+       tasks = [retrieve_documents(query, retriever) for query in queries]
+       results = await asyncio.gather(*tasks)
+       
+       # 결과 병합 및 중복 제거
+       all_docs = []
+       seen_contents = set()
+       
+       for docs in results:
+           for doc in docs:
+               if doc.page_content not in seen_contents:
+                   seen_contents.add(doc.page_content)
+                   all_docs.append(doc)
+       
+       return all_docs
+   ```
+
+# Test Strategy:
+## 테스트 전략
+
+1. **단위 테스트 (pytest)**
+   - 각 LangGraph 노드 기능 테스트
+   ```python
+   def test_multi_query_generation():
+       """멀티쿼리 생성 기능 테스트"""
+       state = RAGState(query="세금 공제 방법에 대해 알려주세요")
+       llm = MockLLM(responses=["1. 소득세 공제 방법\n2. 사업자 세금 공제\n3. 부가가치세 공제 절차"])
+       
+       result = generate_multiple_queries(state, llm)
+       
+       assert len(result.generated_queries) >= 3
+       assert "소득세" in result.generated_queries[0]
+       assert "사업자" in result.generated_queries[1]
+   
+   def test_reranker():
+       """재순위화 모듈 테스트"""
+       reranker = CrossEncoderReranker()
+       query = "법인세 신고 기한"
+       docs = [
+           Document(page_content="법인세 신고는 사업연도 종료일로부터 3개월 이내에 해야 합니다.", metadata={"source": "tax_law_1"}),
+           Document(page_content="소득세 신고 기한은 매년 5월입니다.", metadata={"source": "tax_law_2"}),
+           Document(page_content="법인세란 법인의 소득에 부과되는 세금입니다.", metadata={"source": "tax_law_3"})
+       ]
+       
+       reranked = reranker.rerank(query, docs)
+       
+       assert reranked[0].metadata["source"] == "tax_law_1"  # 가장 관련성 높은 문서가 첫번째
+   
+   def test_context_expansion():
+       """컨텍스트 확장 기능 테스트"""
+       state = RAGState(
+           query="법인세 계산 방법",
+           reranked_documents=[
+               Document(page_content="법인세는 과세표준에 세율을 곱하여 계산합니다.", metadata={"source": "tax_doc"})
+           ]
+       )
+       
+       llm = MockLLM(responses=["법인세, 과세표준, 세율, 계산, 공제"])
+       retriever = MockRetriever(docs=[
+           Document(page_content="과세표준이란 총수입금액에서 필요경비를 차감한 금액입니다.", metadata={"source": "tax_terms"}),
+           Document(page_content="법인세 세율은 과세표준에 따라 10~25%입니다.", metadata={"source": "tax_rates"})
+       ])
+       
+       result = expand_document_context(state, llm, retriever)
+       
+       assert "과세표준" in result.expanded_context
+       assert "세율" in result.expanded_context
+       assert len(result.reranked_documents) > 0
+   ```
+
+2. **통합 테스트**
+   - 전체 LangGraph 파이프라인 테스트
+   ```python
+   def test_langgraph_rag_pipeline():
+       """LangGraph RAG 파이프라인 통합 테스트"""
+       llm = get_test_llm()
+       retriever = get_test_retriever()
+       reranker = CrossEncoderReranker()
+       
+       rag_graph = create_rag_graph(llm, retriever, reranker)
+       
+       test_query = "2023년 개정된 소득세법에 따른 종합소득세 계산 방법을 알려주세요"
+       initial_state = RAGState(query=test_query)
+       
+       result = rag_graph.invoke(initial_state)
+       
+       assert result.final_answer != ""
+       assert len(result.retrieved_documents) > 0
+       assert len(result.reranked_documents) > 0
+       assert "소득세" in result.final_answer
+   ```
+
+3. **API 엔드포인트 테스트**
+   - FastAPI TestClient를 사용한 엔드포인트 테스트
+   ```python
+   def test_advanced_rag_endpoint():
+       """고급 RAG API 엔드포인트 테스트"""
+       from fastapi.testclient import TestClient
+       from main import app
+       
+       client = TestClient(app)
+       
+       response = client.post(
+           "/api/advanced-rag/query",
+           json={
+               "query": "법인세 신고시 필요한 서류는 무엇인가요?",
+               "use_multi_query": True,
+               "use_reranking": True,
+               "use_context_expansion": True
+           }
+       )
+       
+       assert response.status_code == 200
+       data = response.json()
+       assert "answer" in data
+       assert "sources" in data
+       assert len(data["sources"]) > 0
+   ```
+
+4. **성능 평가 테스트**
+   - 기존 RAG와 고급 RAG 성능 비교 테스트
+   ```python
+   def test_advanced_rag_performance():
+       """고급 RAG와 기본 RAG 성능 비교"""
+       test_queries = [
+           "부가가치세 신고 기한은 언제인가요?",
+           "개인사업자가 받을 수 있는 세금 혜택은?",
+           "법인 설립 시 납부해야 하는 세금은?"
+       ]
+       
+       # 기본 RAG 성능 측정
+       basic_rag = get_basic_rag_pipeline()
+       basic_metrics = evaluate_rag(test_queries, basic_rag)
+       
+       # 고급 RAG 성능 측정
+       advanced_rag = get_advanced_rag_pipeline()
+       advanced_metrics = evaluate_advanced_rag(test_queries, advanced_rag)
+       
+       # 성능 비교
+       assert advanced_metrics["accuracy"] > basic_metrics["accuracy"]
+       assert advanced_metrics["retrieval_precision"] > basic_metrics["retrieval_precision"]
+       
+       print(f"기본 RAG 정확도: {basic_metrics['accuracy']:.2f}")
+       print(f"고급 RAG 정확도: {advanced_metrics['accuracy']:.2f}")
+       print(f"성능 향상: {(advanced_metrics['accuracy'] - basic_metrics['accuracy']) * 100:.1f}%")
+   ```
+
+5. **부하 테스트**
+   - 고급 RAG 파이프라인의 성능 및 확장성 테스트
+   ```python
+   def test_advanced_rag_load():
+       """고급 RAG 파이프라인 부하 테스트"""
+       import time
+       from concurrent.futures import ThreadPoolExecutor
+       
+       rag_pipeline = get_advanced_rag_pipeline()
+       test_queries = generate_test_queries(50)  # 50개 테스트 쿼리 생성
+       
+       # 단일 쿼리 처리 시간 측정
+       start_time = time.time()
+       rag_pipeline.invoke({"query": test_queries[0]})
+       single_query_time = time.time() - start_time
+       
+       # 병렬 처리 성능 측정
+       start_time = time.time()
+       with ThreadPoolExecutor(max_workers=5) as executor:
+           results = list(executor.map(
+               lambda q: rag_pipeline.invoke({"query": q}),
+               test_queries[:10]
+           ))
+       parallel_time = time.time() - start_time
+       
+       # 결과 분석
+       avg_parallel_time = parallel_time / 10
+       print(f"단일 쿼리 처리 시간: {single_query_time:.2f}초")
+       print(f"병렬 처리 평균 시간: {avg_parallel_time:.2f}초")
+       print(f"처리량: {10 / parallel_time:.2f} 쿼리/초")
+   ```

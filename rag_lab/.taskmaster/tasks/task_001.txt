@@ -1,0 +1,21 @@
+# Task ID: 1
+# Title: 프로젝트 저장소 스캐폴딩 및 기본 FastAPI 헬스체크
+# Status: done
+# Dependencies: None
+# Priority: medium
+# Description: Poetry 기반 패키지 관리, pre-commit, lint, 테스트 폴더를 설정하고 FastAPI 서버에 헬스체크 라우트를 노출한다.
+# Details:
+• poetry new tax_rag_backend && cd tax_rag_backend
+• pyproject.toml 에 fastapi==0.111, uvicorn[standard]==0.30, pydantic==2 추가
+• pre-commit: ruff, black, isort, mypy 훅 설정
+• main.py
+    from fastapi import FastAPI
+    app = FastAPI(title="Tax RAG API")
+    @app.get("/health")
+    async def health():
+        return {"status": "ok"}
+• uvicorn main:app --reload 로 수동 기동 확인
+
+# Test Strategy:
+pytest 에서 /health 호출 → 200 & {"status":"ok"} 검증
+CI(GitHub Actions) 에 pytest + ruff + mypy 워크플로우 추가

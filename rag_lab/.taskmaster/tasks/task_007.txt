@@ -1,0 +1,16 @@
+# Task ID: 7
+# Title: /history 엔드포인트 구현
+# Status: deferred
+# Dependencies: None
+# Priority: medium
+# Description: Redis 에 저장된 최근 k턴 대화내역을 조회하여 반환한다.
+# Details:
+• routes/history.py
+    @router.get("/history/{session_id}")
+    async def history(session_id:UUID):
+        msgs = redis_client.lrange(f"session:{session_id}",0,k-1)
+        return [HistoryItem.model_validate_json(m) for m in msgs]
+• FastAPI response_model=List[HistoryItem]
+
+# Test Strategy:
+pytest 로 대화 3턴 입력 후 GET /history 반환 길이 3 확인 및 순서 역순 아님 확인

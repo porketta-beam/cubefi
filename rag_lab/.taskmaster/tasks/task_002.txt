@@ -1,0 +1,63 @@
+# Task ID: 2
+# Title: Redis 세션 메모리 레이어 구축
+# Status: deferred
+# Dependencies: None
+# Priority: medium
+# Description: ConversationBufferWindowMemory 를 RedisChatMessageHistory 로 래핑하여 세션별 k턴(6) 단기 컨텍스트를 저장/조회한다.
+# Details:
+• poetry add redis>=5.0 langchain==0.2
+• settings.py: REDIS_URL env 로드, redis.asyncio.Redis 풀 생성
+• memory.py
+    class RedisSessionMemory(ConversationBufferWindowMemory):
+        def __init__(self,k:int=6):
+            super().__init__(chat_memory=RedisChatMessageHistory(
+                 session_id="", k=k, ttl=1800, client=redis_client))
+• LPUSH/LTRIM 구현, HistoryItem 모델 직렬화는 orjson 사용
+
+# Test Strategy:
+pytest-asyncio 로 세션 생성→ 8회 메시지 삽입 후 길이 6 확인
+TTL 만료 모킹하여 자동 삭제 검증
+
+# Subtasks:
+## 1. 환경 변수 로딩 및 Redis 클라이언트 풀 초기화 [in-progress]
+### Dependencies: None
+### Description: settings.py에서 REDIS_URL을 읽어 비동기 Redis 풀(redis.asyncio.Redis)을 생성한다.
+### Details:
+• dotenv 또는 pydantic Settings 사용
+• 싱글톤 패턴으로 redis_client 노출
+• poetry add redis>=5.0
+• 실패 시 예외 로깅
+
+## 2. ChatMessageHistory 직렬화 포맷 정의 [pending]
+### Dependencies: 2.1
+### Description: HistoryItem 모델과 orjson 기반 직렬화/역직렬화 헬퍼를 구현한다.
+### Details:
+• dataclass HistoryItem(role:str, content:str, ts:float)
+• dumps/loads 래퍼에서 orjson 사용
+• 유닛 테스트로 round-trip 보장
+
+## 3. RedisSessionMemory 클래스 구현 [pending]
+### Dependencies: 2.2
+### Description: ConversationBufferWindowMemory를 상속해 k-턴 윈도우 및 TTL 지원 Redis 저장소를 완성한다.
+### Details:
+• __init__(session_id:str,k:int=6,ttl:int=1800)
+• add_message → LPUSH + LTRIM
+• messages → LRANGE 역순 반환 후 loads
+• expire 설정으로 TTL 갱신
+
+## 4. pytest-asyncio 기반 TTL·윈도우 검증 테스트 작성 [pending]
+### Dependencies: 2.3
+### Description: 8회 메시지 삽입 시 길이 6 유지 및 TTL 만료 후 자동 삭제를 모킹하여 검증한다.
+### Details:
+• fakeredis 또는 시간 모킹 사용
+• assert len(memory.messages)==6
+• fast-forward 1801s 후 키 미존재 확인
+
+## 5. 문서화 및 예제 코드 작성 [pending]
+### Dependencies: 2.4
+### Description: README 및 docstring에 사용 방법, 예제 세션 코드, 테스트 실행법을 추가한다.
+### Details:
+• README: 설치→환경변수→예제 스니펫
+• docs/source/memory.md 작성
+• 코드 블록에 async 사용 예시 포함
+

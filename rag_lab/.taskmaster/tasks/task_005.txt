@@ -1,0 +1,21 @@
+# Task ID: 5
+# Title: SSE 스트리밍 어댑터 및 /chat 엔드포인트 구현
+# Status: done
+# Dependencies: None
+# Priority: medium
+# Description: LangChain Runnable 과 FastAPI StreamingResponse 를 연결하여 GPT 토큰을 실시간으로 SSE 포맷으로 전송한다.
+# Details:
+• poetry add sse-starlette
+• sse_adapter.py
+    async def stream_chain(request,chat_req):
+        async for chunk in chain.astream(chat_req.message,session_id=chat_req.session_id):
+            yield f"data:{chunk.json()}\n\n"
+• routes/chat.py
+    @router.post("/chat")
+    async def chat(req:ChatRequest):
+        return EventSourceResponse(stream_chain(req))
+• JWT 헤더 검증: fastapi-security==0.7, upstream JWKS 캐시
+• CORS 미들웨어 *허용
+
+# Test Strategy:
+pytest-asyncio + httpx.AsyncClient 로 /chat 호출 → 이벤트 스트림을 수신, finish==True 포함 검증

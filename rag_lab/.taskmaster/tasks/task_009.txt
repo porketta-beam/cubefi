@@ -1,0 +1,72 @@
+# Task ID: 9
+# Title: LangSmith 및 OpenTelemetry 관측성 통합
+# Status: done
+# Dependencies: None
+# Priority: medium
+# Description: auto_rag 모듈 전반(RAG 코어, Streamlit, FastAPI 서버)에 LangSmith 및 OpenTelemetry 기반 분산 추적을 적용해 모든 문서 검색·LLM 호출·API 요청의 지연시간과 오류율을 LangSmith 대시보드에서 확인할 수 있도록 한다.
+# Details:
+• poetry add langsmith==0.3 opentelemetry-sdk opentelemetry-exporter-otlp
+• auto_rag/mod/langsmith_monitor.py: LangSmith Client, trace 컨텍스트 매니저, get_tracer 헬퍼 구현
+• rag_system_manager.py: get_answer() 내부에서 문서 검색 span, LLM 호출 span 분리
+• FastAPIInstrumentor.instrument_app(app, excluded_urls="/health,/docs")
+• Streamlit·WebSocket 경로에도 langsmith_monitor.trace 사용
+• settings(.env): LANGSMITH_API_KEY, LANGSMITH_PROJECT, OTEL_EXPORTER_OTLP_ENDPOINT 등 환경 변수 정의
+
+# Test Strategy:
+1) pytest -k "langsmith" → get_answer() 호출 시 run_id·parent span 구조 확인
+2) Streamlit 앱에서 실제 질문 입력 후 LangSmith UI에서 트레이스 트리 확인
+3) Locust 100 rps 부하 → OTLP Collector에서 샘플링 100% 및 Span 수 = 요청 수 * 3(get_answer, search, call_llm) 검증
+4) FastAPI WebSocket 채널 /chat 스트리밍 호출 시 Span 누락 없는지 확인
+
+# Subtasks:
+## 1. LangSmith 기본 설정 및 모니터링 모듈 생성 [done]
+### Dependencies: None
+### Description: auto_rag/mod/langsmith_monitor.py를 생성하여 LangSmith Client 래퍼, trace 컨텍스트 매니저, get_tracer를 구현하고 LANGSMITH_API_KEY 등 환경 변수를 설정한다.
+### Details:
+• poetry add langsmith==0.3 opentelemetry-sdk opentelemetry-exporter-otlp
+• .env 및 settings.py에 LANGSMITH_API_KEY, LANGSMITH_PROJECT, OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_SDK_DISABLED=false 추가
+• langsmith_monitor.py
+    from langsmith import Client
+    from opentelemetry import trace
+    _client = Client()
+    def trace_span(name: str):
+        ...  # contextmanager로 Span 시작/종료 및 LangSmith 기록
+• 초깃값으로 trace_span("init") 호출하여 모듈 import 시 LangSmith 연결 확인
+
+## 2. auto_rag RAG 시스템에 LangSmith 추적 적용 [done]
+### Dependencies: 9.1
+### Description: rag_system_manager.py의 get_answer() 메서드에 LangSmith 추적을 추가하고, 문서 검색과 LLM 호출을 별도 Span으로 분리한다.
+### Details:
+• rag_system_manager.py
+    from auto_rag.mod.langsmith_monitor import trace_span
+    def get_answer(question):
+        with trace_span("get_answer"):
+            with trace_span("vector_search"):
+                docs = vectordb.similarity_search(question)
+            with trace_span("call_llm"):
+                answer = llm.invoke(docs, question)
+            return answer
+• 호출 스택에 tags={"component":"RAG"} 부여
+
+## 3. Streamlit 앱에서 LangSmith 통합 테스트 [done]
+### Dependencies: 9.2
+### Description: rag_streamlit_v2.py에서 모니터링된 RAG 시스템을 사용해 실제 질문을 입력하고 LangSmith 대시보드에서 트레이스를 시각적으로 검증한다.
+### Details:
+• rag_streamlit_v2.py
+    from auto_rag.mod.langsmith_monitor import trace_span
+    with trace_span("streamlit_session"):
+        answer = rag_manager.get_answer(query)
+• st.button("LangSmith 열기") 클릭 시 대시보드 링크 제공
+
+## 4. API 서버로 확장 및 FastAPI 인스트루먼트 적용 [done]
+### Dependencies: 9.3
+### Description: api/services/rag_config_service.py, server.py(WebSocket) 등에 LangSmith 추적을 적용하고 FastAPIInstrumentor를 사용해 전체 시스템 성능을 검증한다.
+### Details:
+• api/services/rag_config_service.py
+    with trace_span("rag_api_request"):
+        answer = rag_manager.get_answer(req.question)
+• server.py
+    FastAPIInstrumentor.instrument_app(app, excluded_urls="/health,/docs")
+    WebSocket 엔드포인트 on_receive 내부에 trace_span("ws_message") 적용
+• Locustfile.py에서 100 rps 부하 시 모든 Span 수집 확인
+
