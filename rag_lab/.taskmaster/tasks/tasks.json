@@ -704,7 +704,7 @@
             "description": "Elasticsearch 클라이언트를 설정하고 하이브리드 검색을 위한 인덱스를 구성합니다.",
             "dependencies": [],
             "details": "Elasticsearch 클라이언트 설정 및 인덱스 매핑을 통해 한국어 분석기를 사용하는 인덱스를 생성합니다.\n<info added on 2025-07-21T21:42:17.216Z>\n• Elasticsearch Python 클라이언트 설정  \n  ```python\n  from elasticsearch import Elasticsearch\n\n  def get_elasticsearch_client() -> Elasticsearch:\n      return Elasticsearch(\n          hosts=settings.ELASTICSEARCH_HOSTS,\n          basic_auth=(\n              settings.ELASTICSEARCH_USERNAME,\n              settings.ELASTICSEARCH_PASSWORD,\n          ),\n          verify_certs=settings.ELASTICSEARCH_VERIFY_CERTS,\n          request_timeout=30,\n          max_retries=3,\n          retry_on_timeout=True,\n      )\n  ```\n\n• 하이브리드 인덱스 매핑 및 nori 형태소 분석기 적용 예시  \n  ```python\n  def create_hybrid_index(index_name: str, dims: int = 768) -> None:\n      client = get_elasticsearch_client()\n\n      mapping_body = {\n          \"settings\": {\n              \"number_of_shards\": 1,\n              \"number_of_replicas\": 1,\n              \"analysis\": {\n                  \"analyzer\": {\n                      \"nori_analyzer\": {\n                          \"type\": \"custom\",\n                          \"tokenizer\": \"nori_tokenizer\",\n                          \"filter\": [\"lowercase\", \"nori_readingform\"]\n                      }\n                  }\n              }\n          },\n          \"mappings\": {\n              \"properties\": {\n                  \"content\": {           # BM25 검색용\n                      \"type\": \"text\",\n                      \"analyzer\": \"nori_analyzer\"\n                  },\n                  \"embedding\": {         # 벡터 검색용\n                      \"type\": \"dense_vector\",\n                      \"dims\": dims,\n                      \"index\": True,\n                      \"similarity\": \"cosine\"\n                  },\n                  \"doc_id\": { \"type\": \"keyword\" },\n                  \"created_at\": { \"type\": \"date\" }\n              }\n          }\n      }\n\n      if client.indices.exists(index=index_name):\n          client.indices.delete(index=index_name)\n      client.indices.create(index=index_name, body=mapping_body)\n  ```\n\n• 적용 결과  \n  1. `content` 필드는 nori 기반 분석으로 BM25 텍스트 검색을 수행.  \n  2. `embedding` 필드는 cosine 유사도로 벡터 인덱싱되어 ANN 검색 엔진과 동일한 결과를 제공.  \n  3. 단일 인덱스에서 두 필드를 조합하여 BM25 점수와 벡터 점수를 앙상블하여 최종 랭킹을 계산할 수 있도록 foundation 구축.\n</info added on 2025-07-21T21:42:17.216Z>",
-            "status": "in-progress",
+            "status": "done",
             "testStrategy": "Elasticsearch 클라이언트 연결 및 인덱스 생성 테스트"
           },
           {
@@ -715,7 +715,7 @@
               "19.1"
             ],
             "details": "청크 단위로 텍스트와 벡터 임베딩을 함께 저장하는 모듈을 구현합니다.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "문서 인덱싱 기능 테스트"
           },
           {
@@ -727,7 +727,7 @@
               "19.2"
             ],
             "details": "BM25와 벡터 임베딩의 스코어를 결합하여 하이브리드 검색을 수행합니다.\n<info added on 2025-07-21T21:42:44.672Z>\n구현 세부사항 추가\n• 위치: rag/search/hybrid_search.py\n• 함수 시그니처\n    def hybrid_rrf_search(\n        query: str,\n        *,\n        alpha: float = 0.5,\n        top_k: int = 10,\n        rrf_k: int = 60,\n        es_index: str = \"tax_docs\",\n        client: Elasticsearch | None = None,\n    ) -> list[dict]:\n        \"\"\"\n        BM25 + 벡터 검색 결과를 Reciprocal Rank Fusion(RRF)으로 결합하여 상위 top_k 문서를 반환\n\n        Args:\n            query: 사용자 검색어\n            alpha: BM25(α)와 벡터(1-α) 가중치\n            top_k: 최종 반환 문서 개수\n            rrf_k: RRF 분모 보정값(일반적으로 60)\n            es_index: 검색 대상 인덱스\n            client: 주입 가능한 Elasticsearch 인스턴스\n        \"\"\"\n\n• 알고리즘\n  1. BM25 검색 → bm25_results = [(doc_id, rank)]\n     - ES `search` + `multi_match`(query, fields=[\"title^2\",\"content\"])\n  2. 벡터 KNN 검색 → vector_results = [(doc_id, rank)]\n     - ES `knn_search` + `field=\"embedding\"`\n  3. RRF 스코어 계산\n     - rrf_score(rank) = 1 / (rrf_k + rank)\n  4. 두 랭킹의 RRF 스코어 가중 합산\n     - fusion_score[doc_id] = α * rrf_bm25 + (1-α) * rrf_vector\n  5. fusion_score 내림차순 정렬 후 top_k 반환\n\n• 예외 처리\n  - alpha ∉ [0,1] 입력 시 ValueError\n  - ES 연결 실패 시 ConnectionError\n\n• 테스트 전략 (pytest)\n  - fixture 로 BM25/벡터 모의 결과 생성, hybrid_rrf_search 실행 후\n    ▪ alpha=1 → BM25 순서와 동일\n    ▪ alpha=0 → 벡터 순서와 동일\n    ▪ alpha=0.5 → 결합 스코어 수학적 기대치 검증\n  - rrf_k 값 변화에 따른 스코어 단조성 확인\n  - top_k 초과 문서 요청 시 결과 길이 == top_k 검증\n</info added on 2025-07-21T21:42:44.672Z>",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "하이브리드 검색 기능 테스트"
           },
           {
@@ -891,7 +891,7 @@
     ],
     "metadata": {
       "created": "2025-07-15T09:33:41.655Z",
-      "updated": "2025-07-21T23:27:03.811Z",
+      "updated": "2025-07-22T01:54:37.092Z",
       "description": "Tasks for master context"
     }
   }
