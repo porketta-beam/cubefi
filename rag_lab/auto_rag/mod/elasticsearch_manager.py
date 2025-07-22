@@ -14,13 +14,31 @@ class ElasticsearchManager:
                  host: str = "http://localhost:9200", 
                  index_name: str = "tax_documents",
                  username: str = "",
-                 password: str = ""):
+                 password: str = "",
+                 embedding_dims: int = None):
         self.host = host
         self.index_name = index_name
         self.username = username
         self.password = password
         self.client = None
-        self.embedding_dims = 1536  # text-embedding-3-large 차원수
+        self.embedding_dims = embedding_dims  # 동적으로 설정됨 (None이면 자동 감지)
+        
+    def _detect_embedding_dimensions(self, embeddings) -> int:
+        """임베딩 모델의 실제 차원을 감지"""
+        try:
+            # 테스트 임베딩 생성으로 차원 확인
+            test_embedding = embeddings.embed_query("dimension test")
+            detected_dims = len(test_embedding)
+            st.info(f"🔍 임베딩 모델 차원 자동 감지: {detected_dims}")
+            return detected_dims
+        except Exception as e:
+            st.warning(f"⚠️ 차원 감지 실패, 기본값 사용: {str(e)}")
+            return 1536  # 안전한 기본값
+    
+    def set_embedding_dimensions(self, embeddings):
+        """임베딩 차원을 설정 (인덱스 생성 전 호출 필요)"""
+        if self.embedding_dims is None:
+            self.embedding_dims = self._detect_embedding_dimensions(embeddings)
         
     def _get_client(self):
         """Get Elasticsearch client with lazy loading"""

@@ -88,7 +88,7 @@ class RawDataSyncManager:
         
         return sync_status
     
-    def sync_with_db(self, db_manager, chunk_size: int = 500, chunk_overlap: int = 100, elasticsearch_manager: Optional[ElasticsearchManager] = None) -> bool:
+    def sync_with_db(self, db_manager, chunk_size: int = 500, chunk_overlap: int = 100, elasticsearch_manager: Optional[ElasticsearchManager] = None, embedding_model: str = "text-embedding-3-large") -> bool:
         """Synchronize new files in raw_data folder to ChromaDB and optionally Elasticsearch"""
         try:
             # Check synchronization status
@@ -127,7 +127,11 @@ class RawDataSyncManager:
             
             # OpenAI 임베딩 객체 생성 (Elasticsearch용)
             if use_elasticsearch:
-                embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
+                embeddings = OpenAIEmbeddings(model=embedding_model)
+                st.info(f"🤖 사용 중인 임베딩 모델: {embedding_model}")
+                
+                # Elasticsearch 매니저에 임베딩 차원 자동 설정
+                elasticsearch_manager.set_embedding_dimensions(embeddings)
             
             for filename in new_files:
                 file_path = os.path.join(self.raw_data_path, filename)
