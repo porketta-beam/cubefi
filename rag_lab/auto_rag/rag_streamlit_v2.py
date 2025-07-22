@@ -474,10 +474,15 @@ with tab2:
             # Elasticsearch 매니저 준비
             elasticsearch_mgr = None
             if enable_elasticsearch:
+                st.info("🔄 Elasticsearch 병렬 인덱싱이 활성화되었습니다.")
                 elasticsearch_mgr = st.session_state.elasticsearch_manager
                 if not elasticsearch_mgr.check_connection():
                     st.warning("Elasticsearch 연결이 실패했습니다. ChromaDB만 사용합니다.")
                     elasticsearch_mgr = None
+                else:
+                    st.success("✅ Elasticsearch 연결 확인 완료 - 병렬 인덱싱 시작")
+            else:
+                st.info("ℹ️ Elasticsearch 병렬 인덱싱이 비활성화되었습니다. ChromaDB만 사용합니다.")
             
             success = sync_manager.sync_with_db(
                 db_manager=db_manager,

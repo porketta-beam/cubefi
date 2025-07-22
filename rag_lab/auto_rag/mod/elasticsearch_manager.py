@@ -162,13 +162,18 @@ class ElasticsearchManager:
     def index_documents(self, documents: List[Any], embeddings: List[List[float]]) -> bool:
         """Index documents with embeddings to Elasticsearch"""
         try:
+            st.info(f"🔄 Elasticsearch 인덱싱 시작: {len(documents)}개 문서, {len(embeddings)}개 임베딩")
+            
             client = self._get_client()
             if client is None:
+                st.error("❌ Elasticsearch 클라이언트 연결 실패")
                 return False
             
             # 인덱스가 존재하지 않으면 생성
             if not self.check_index_exists():
+                st.info(f"📝 인덱스 '{self.index_name}'가 존재하지 않음. 새로 생성합니다.")
                 if not self.create_index():
+                    st.error("❌ 인덱스 생성 실패")
                     return False
             
             # bulk 인덱싱을 위한 데이터 준비
@@ -200,19 +205,26 @@ class ElasticsearchManager:
             
             # bulk 인덱싱 실행
             if bulk_data:
+                st.info(f"📤 {len(bulk_data)//2}개 문서 Elasticsearch 인덱싱 중...")
                 response = client.bulk(body=bulk_data, refresh=True)
                 
                 # 오류 확인
                 if response.get("errors"):
                     error_count = sum(1 for item in response["items"] if "error" in item.get("index", {}))
-                    st.warning(f"Elasticsearch 인덱싱 중 {error_count}개 오류 발생")
+                    st.error(f"❌ Elasticsearch 인덱싱 중 {error_count}개 오류 발생")
+                    # 상세 오류 정보 표시
+                    for item in response["items"]:
+                        if "error" in item.get("index", {}):
+                            error_detail = item["index"]["error"]
+                            st.error(f"오류 상세: {error_detail}")
                     return False
                 else:
                     indexed_count = len(documents)
-                    st.success(f"Elasticsearch에 {indexed_count}개 문서 인덱싱 완료")
+                    st.success(f"✅ Elasticsearch에 {indexed_count}개 문서 인덱싱 완료")
                     return True
-            
-            return True
+            else:
+                st.warning("⚠️ 인덱싱할 데이터가 없습니다.")
+                return True
             
         except Exception as e:
             st.error(f"Elasticsearch 문서 인덱싱 실패: {str(e)}")
