@@ -149,8 +149,8 @@ async def health_check():
         "timestamp": datetime.utcnow().isoformat() + "Z"
     }
 
-@app.websocket("/ws/chat")
-async def websocket_chat(websocket: WebSocket):
+async def handle_websocket_chat(websocket: WebSocket):
+    """공통 WebSocket 채팅 처리 함수"""
     await websocket.accept()
     print("새 WebSocket 연결 수락됨")
     
@@ -228,6 +228,23 @@ async def websocket_chat(websocket: WebSocket):
             print("연결이 이미 끊어져 오류 메시지를 보낼 수 없습니다")
     finally:
         print("WebSocket 연결이 종료되었습니다")
+
+@app.websocket("/ws/chat")
+async def websocket_chat(websocket: WebSocket):
+    """기본 채팅 WebSocket 엔드포인트"""
+    await handle_websocket_chat(websocket)
+
+@app.websocket("/ws/ex_chat")
+async def websocket_ex_chat(websocket: WebSocket):
+    """외부 채팅 WebSocket 엔드포인트"""
+    await handle_websocket_chat(websocket)
+
+@app.websocket("/ws/in_chat")
+async def websocket_in_chat(websocket: WebSocket):
+    """내부 채팅 WebSocket 엔드포인트"""
+    await handle_websocket_chat(websocket)
+        
+
 
 # ========== 기존 bot_response 기반 WebSocket 코드 (주석처리됨) ==========
 """
