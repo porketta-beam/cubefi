@@ -27,3 +27,42 @@ node_modules/
 # Cursor and Claude directories
 **/.cursor/
 **/.claude/
+
+# Test backups and cache
+backup_old_tests/
+.pytest_cache/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+.hypothesis/
+
+# Test output and temp files
+test-results/
+*.xml
+.tox/
+.cache
+
+# Python compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+
+# ChromaDB and data files
+chroma_db/
+*.sqlite3
+*.db
+
+# Temporary files
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db

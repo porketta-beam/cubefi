@@ -1,93 +1,53 @@
 {
 	"meta": {
-		"generatedAt": "2025-07-15T09:41:17.507Z",
-		"tasksAnalyzed": 10,
-		"totalTasks": 10,
-		"analysisCount": 10,
+		"generatedAt": "2025-07-21T07:59:52.883Z",
+		"tasksAnalyzed": 5,
+		"totalTasks": 20,
+		"analysisCount": 5,
 		"thresholdScore": 5,
 		"projectName": "Taskmaster",
-		"usedResearch": false
+		"usedResearch": true
 	},
 	"complexityAnalysis": [
 		{
-			"taskId": 1,
-			"taskTitle": "프로젝트 저장소 스캐폴딩 및 기본 FastAPI 헬스체크",
-			"complexityScore": 3,
-			"recommendedSubtasks": 3,
-			"expansionPrompt": "1) poetry 프로젝트 생성 및 pyproject.toml 의존성 추가 2) pre-commit, ruff·black·isort·mypy 설정 3) FastAPI 앱과 /health 라우트·pytest·GitHub Actions 설정의 세 단계로 작업을 세분화하십시오. 각 단계마다 실행 명령, 생성/수정 파일, 완료 기준을 명시하세요.",
-			"reasoning": "의존성 추가, 기본 라우트, CI 템플릿 등 모두 표준 절차로 난이도가 낮아 작은 수의 서브태스크면 충분합니다."
-		},
-		{
-			"taskId": 2,
-			"taskTitle": "Redis 세션 메모리 레이어 구축",
-			"complexityScore": 5,
-			"recommendedSubtasks": 5,
-			"expansionPrompt": "환경변수 및 Redis 클라이언트 초기화 → ChatMessageHistory 직렬화 형식 정의 → RedisSessionMemory 클래스 구현 → TTL·윈도우 사이즈 검증용 pytest-asyncio 작성 → 문서화 및 예제 코드 작성 순으로 세부 작업을 설계하십시오.",
-			"reasoning": "비동기 Redis, 직렬화, TTL, 테스트 준비까지 포함되어 있어 중간 정도 복잡도로 5개 안팎의 세부 단계가 적당합니다."
-		},
-		{
-			"taskId": 3,
-			"taskTitle": "임베딩 파이프라인 및 Chroma 벡터 DB 초기화",
-			"complexityScore": 6,
-			"recommendedSubtasks": 5,
-			"expansionPrompt": "문서 로더 작성 → OpenAI 임베딩 생성 로직 구현 → Chroma 컬렉션 초기화 및 적재 → 영속화·S3 백업 스크립트 작성 → 샘플 데이터 테스트 및 자동화 파이프라인(크론/워크플로) 설정의 다섯 단계로 세부 플랜을 작성하십시오.",
-			"reasoning": "외부 API 호출, 대용량 임베딩, 스토리지 백업 등 여러 컴포넌트가 연계되므로 중상 수준 복잡도이며 5단계 정도가 필요합니다."
-		},
-		{
-			"taskId": 4,
-			"taskTitle": "RAG 검색 체인 구성",
-			"complexityScore": 7,
-			"recommendedSubtasks": 6,
-			"expansionPrompt": "1) 벡터 DB 리트리버 래퍼 설정 2) LLM 파라미터 튜닝 및 초기화 3) StuffDocumentsChain 구성 4) RunnableWithMessageHistory 통합 및 태그·콜백 설정 5) citation 포함 출력 파서 구현 6) 통합 테스트 및 벤치마크 작성 순으로 세부 단계를 세분화하십시오.",
-			"reasoning": "다층 컴포넌트 연결과 출력 후처리가 필요하고 품질 확인용 테스트도 포함되어 복잡도가 높아 6개의 세부 작업이 권장됩니다."
-		},
-		{
-			"taskId": 5,
-			"taskTitle": "SSE 스트리밍 어댑터 및 /chat 엔드포인트 구현",
-			"complexityScore": 7,
-			"recommendedSubtasks": 5,
-			"expansionPrompt": "SSE 어댑터 함수 작성 → JWT 인증·CORS 미들웨어 추가 → FastAPI /chat 라우트 정의 → 토큰 단위 스트리밍 테스트 스크립트 작성 → 오류·타임아웃 처리 로직 및 문서화의 다섯 단계로 상세 계획을 만드십시오.",
-			"reasoning": "실시간 스트림, 인증, 네트워크 안정성 등을 모두 고려해야 하므로 높은 복잡도이며 5단계 정도로 나누는 것이 효율적입니다."
-		},
-		{
-			"taskId": 6,
-			"taskTitle": "세금 계산기 Python 모듈 개발",
-			"complexityScore": 6,
-			"recommendedSubtasks": 5,
-			"expansionPrompt": "세율 테이블 상수화 → 입력·출력 pydantic 모델 정의 → 계산 로직 구현 및 엣지케이스 처리 → LangChain Tool 래핑 → 95% 커버리지 단위 테스트 작성의 순서로 세부 작업을 설계하십시오.",
-			"reasoning": "도메인 규칙을 코드로 옮기고 높은 커버리지를 달성해야 하므로 중상 정도 난이도이며 5개의 세부 단계가 적합합니다."
-		},
-		{
-			"taskId": 7,
-			"taskTitle": "/history 엔드포인트 구현",
-			"complexityScore": 3,
-			"recommendedSubtasks": 3,
-			"expansionPrompt": "Redis 조회 헬퍼 작성 → FastAPI 라우트 및 response_model 정의 → pytest-asyncio 통합 테스트 작성의 세 단계로 작업을 분해하십시오.",
-			"reasoning": "단일 조회 라우트 구현과 간단한 테스트만 포함되어 낮은 복잡도로 3개 정도면 충분합니다."
-		},
-		{
-			"taskId": 8,
-			"taskTitle": "/evaluate 엔드포인트 및 RAGAS 배치 스크립트",
-			"complexityScore": 7,
-			"recommendedSubtasks": 6,
-			"expansionPrompt": "Celery 설정 및 Redis 브로커 연결 → RAGAS 평가 파이프라인 함수 구현 → 비동기 태스크 등록 → FastAPI /evaluate 라우트 작성 → 스케줄러(GH Actions or Celery beat) 설정 → 단위·통합 테스트 작성 순으로 세부 작업을 상세화하십시오.",
-			"reasoning": "비동기 작업 큐, 외부 평가 라이브러리, 스케줄링이 결합되어 상대적 고난도며 6단계 정도로 쪼개야 관리가 용이합니다."
-		},
-		{
-			"taskId": 9,
-			"taskTitle": "LangSmith 및 OpenTelemetry 관측성 통합",
-			"complexityScore": 5,
-			"recommendedSubtasks": 4,
-			"expansionPrompt": "OTel SDK 및 LangSmith 설정 → FastAPI 인스트루먼트 및 필터 설정 → LangChain 체인 래핑 및 태그 구성 → 부하 테스트·추적 검증 스크립트 작성의 네 단계로 세부 계획을 작성하십시오.",
-			"reasoning": "관측 라이브러리 연결과 검증이 주된 작업으로 중간 수준 복잡도이며 4단계 분할이 적절합니다."
-		},
-		{
 			"taskId": 10,
 			"taskTitle": "OpenAPI 문서 검수 및 전면 단위 테스트 보강",
-			"complexityScore": 4,
-			"recommendedSubtasks": 4,
-			"expansionPrompt": "OpenAPI 태그 구조 설계 및 FastAPI 매개변수 설정 → 모델 예제(json_schema_extra) 추가 → 라우트별 pytest-cov 테스트 작성 → CI 커버리지 배지 및 schemathesis 퍼지 테스트 통합 순으로 세부 작업을 정의하십시오.",
-			"reasoning": "문서 보강과 테스트 추가가 주 작업이며 표준 도구를 활용하므로 중간 이하 난이도, 4개 세부 단계로 충분합니다."
+			"complexityScore": 5,
+			"recommendedSubtasks": 6,
+			"expansionPrompt": "FastAPI 기반 프로젝트에서 OpenAPI 자동 스키마 검토, pydantic 모델 예제 추가, pytest-cov를 통한 전체 라우트 단위 테스트, schemathesis 기반 OpenAPI fuzz 테스트, CI 배지 및 커버리지 표시, 문서화(README)까지 각 단계별로 세분화된 작업 항목을 정의하세요.",
+			"reasoning": "이 작업은 API 문서 품질 확보와 테스트 커버리지 보강이라는 두 가지 주요 목표를 포함합니다. FastAPI, pydantic, pytest, schemathesis, CI 연동 등 여러 도구와 표준을 적용해야 하며, 각 단계가 독립적으로 검증되어야 합니다. 하지만 복잡한 알고리즘이나 대규모 시스템 통합은 아니므로 중간 수준(5점)으로 평가합니다. 문서화, 예제 추가, 테스트, CI 연동, 커버리지 배지, OpenAPI fuzz 등 최소 6개 세부 작업으로 분할하는 것이 적절합니다."
+		},
+		{
+			"taskId": 18,
+			"taskTitle": "RAG 시스템 기반 인프라 아키텍처 설계 및 구축",
+			"complexityScore": 9,
+			"recommendedSubtasks": 10,
+			"expansionPrompt": "클라우드 기반 RAG 인프라 설계 및 구축을 위해 요구사항 분석, 플랫폼 선정, 컴퓨팅/스토리지/네트워크/벡터DB/LLM 엔드포인트 설계, IaC 코드 작성 및 배포, 환경 분리, 모니터링/장애대응/보안/컴플라이언스/문서화 등 각 핵심 단계를 세분화하여 작업 항목을 정의하세요.",
+			"reasoning": "이 작업은 클라우드 인프라 설계, IaC 자동화, 보안, 모니터링, 장애 대응, 컴플라이언스, 문서화 등 엔터프라이즈 수준의 다양한 요구사항을 포괄합니다. 각 구성요소가 상호 의존적이며, 설계와 구현, 테스트, 운영까지 전주기적 관리가 필요합니다. 업계 표준에 따라 최소 10개 이상의 세부 작업(요구사항 분석, 플랫폼 선정, 각 리소스 설계/구축, IaC, 테스트, 모니터링, 보안, 문서화 등)으로 분할이 필요하며, 복잡도는 매우 높음(9점)으로 평가됩니다."
+		},
+		{
+			"taskId": 19,
+			"taskTitle": "Elasticsearch BM25 + 벡터 앙상블 검색 기능 구현",
+			"complexityScore": 8,
+			"recommendedSubtasks": 9,
+			"expansionPrompt": "Elasticsearch 기반 BM25+벡터 앙상블 검색 구현을 위해 인덱스 설계, 문서 인덱싱, 하이브리드 검색 쿼리, 파라미터 최적화, API 엔드포인트, 성능 모니터링, 설정 관리, 기존 파이프라인 통합, 테스트(단위/통합/성능/A-B) 등 각 단계를 세분화하여 작업 항목을 정의하세요.",
+			"reasoning": "BM25와 벡터 검색의 하이브리드 구현은 검색 시스템에서 높은 난이도를 가지며, 인덱스 설계, 쿼리 최적화, 파라미터 튜닝, API, 성능 모니터링, 통합 등 다양한 컴포넌트가 필요합니다. 테스트도 단위/통합/성능/A-B 등 다층적으로 요구됩니다. 업계 표준에 따라 최소 9개 세부 작업(설정, 인덱싱, 검색, 최적화, API, 모니터링, 설정, 통합, 테스트)으로 분할이 적절하며, 복잡도는 높음(8점)으로 평가됩니다."
+		},
+		{
+			"taskId": 20,
+			"taskTitle": "LangGraph 기반 고급 RAG 파이프라인 구현",
+			"complexityScore": 10,
+			"recommendedSubtasks": 12,
+			"expansionPrompt": "LangGraph 기반 고급 RAG 파이프라인 구현을 위해 파이프라인 설계, 멀티쿼리/셀프쿼리/재순위화/컨텍스트 확장 모듈 개발, 통합 API, 성능 평가, 기존 시스템 통합, 캐싱/비동기 최적화, 테스트(단위/통합/성능/부하), 문서화 등 각 기능별로 세분화된 작업 항목을 정의하세요.",
+			"reasoning": "LangGraph를 활용한 고급 RAG 파이프라인은 상태 관리, 멀티쿼리, 셀프쿼리, 재순위화, 컨텍스트 확장 등 복수의 고난도 AI/검색 기능을 통합해야 하며, 각 기능이 독립적이면서도 상호작용합니다. 파이프라인 설계, 모듈별 구현, 통합, 성능 최적화, 캐싱, 테스트, 문서화 등 최소 12개 이상의 세부 작업이 필요합니다. 최신 AI 검색 시스템의 베스트 프랙티스를 모두 반영해야 하므로 복잡도는 최고 수준(10점)입니다."
+		},
+		{
+			"taskId": 21,
+			"taskTitle": "최신 정보 가중치 탐색 기능 구현",
+			"complexityScore": 8,
+			"recommendedSubtasks": 9,
+			"expansionPrompt": "RAG 시스템에서 최신 정보 가중치 탐색 기능을 구현하기 위해 시간 가중치 모델, 하이브리드 검색 통합, 파라미터/설정 관리, API 엔드포인트, LangGraph 통합, 파라미터 최적화 도구, 시각화 도구, DB 스키마/성능 최적화, 테스트(단위/통합/성능/시각화) 등 각 단계를 세분화하여 작업 항목을 정의하세요.",
+			"reasoning": "시간 가중치 기반 검색은 기존 검색 파이프라인에 새로운 점수 모델을 도입하고, 파라미터 최적화, 시각화, API, DB 스키마 변경, 성능 최적화 등 다양한 작업이 필요합니다. LangGraph 등 기존 파이프라인과의 통합도 요구되며, 테스트와 시각화까지 포함하면 최소 9개 세부 작업이 필요합니다. 복잡도는 높은 편(8점)입니다."
 		}
 	]
 }

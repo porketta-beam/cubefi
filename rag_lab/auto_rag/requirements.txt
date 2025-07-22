@@ -17,3 +17,5 @@ matplotlib
 seaborn
 koreanize-matplotlib
 pypdf
+
+elasticsearch>=8.0.0

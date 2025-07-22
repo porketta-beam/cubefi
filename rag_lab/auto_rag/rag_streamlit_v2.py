@@ -60,7 +60,9 @@ from mod import (
     EvaluationManager,
     ChatInterfaceManager,
     VisualizationUtils,
-    WorkflowStatusManager
+    WorkflowStatusManager,
+    ElasticsearchManager,
+    HybridSearchManager
 )
 # LangChain 네이티브 자동 추적 사용
 
@@ -131,14 +133,192 @@ if 'chat_interface' not in st.session_state:
     st.session_state.chat_interface = ChatInterfaceManager()
 if 'workflow_manager' not in st.session_state:
     st.session_state.workflow_manager = WorkflowStatusManager()
+if 'elasticsearch_manager' not in st.session_state:
+    st.session_state.elasticsearch_manager = ElasticsearchManager()
+if 'hybrid_search_manager' not in st.session_state:
+    st.session_state.hybrid_search_manager = None  # Initialized later when both managers are ready
 
 st.title("🤖 RAG 시스템 및 RAGAS 평가")
 st.markdown("---")
 
 # 탭 이름
-tab1, tab2, tab3, tab4 = st.tabs(["🔄 Raw Data 동기화", "💬 RAG 테스트", "📝 질문 생성하기", "🔍 RAG 평가하기"])
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📁 Raw Data 관리", "🔄 Raw Data 동기화", "🔍 하이브리드 검색", "💬 RAG 테스트", "📝 질문 생성하기", "🔍 RAG 평가하기"])
 
 with tab1:
+    st.header("📁 Raw Data 관리")
+    
+    # Raw Data 폴더 관리 기능
+    sync_manager = st.session_state.sync_manager
+    raw_data_path = sync_manager.raw_data_path
+    
+    st.subheader("📂 폴더 정보")
+    st.info(f"**Raw Data 폴더 경로:** {raw_data_path}")
+    
+    # 폴더가 없으면 생성
+    if not os.path.exists(raw_data_path):
+        os.makedirs(raw_data_path)
+        st.success("✅ Raw Data 폴더가 생성되었습니다.")
+    
+    # 파일 목록 가져오기
+    def get_file_list():
+        """raw_data 폴더의 파일 목록을 가져옴"""
+        if not os.path.exists(raw_data_path):
+            return []
+        
+        files = []
+        for filename in os.listdir(raw_data_path):
+            file_path = os.path.join(raw_data_path, filename)
+            if os.path.isfile(file_path):
+                file_stat = os.stat(file_path)
+                file_size_mb = file_stat.st_size / (1024 * 1024)
+                files.append({
+                    'filename': filename,
+                    'size_mb': file_size_mb,
+                    'modified_time': file_stat.st_mtime,
+                    'file_path': file_path
+                })
+        return sorted(files, key=lambda x: x['modified_time'], reverse=True)
+    
+    # 파일 목록 표시
+    st.subheader("📋 파일 목록")
+    
+    files = get_file_list()
+    
+    if files:
+        # 파일 정보를 DataFrame으로 변환
+        import datetime
+        file_data = []
+        for file_info in files:
+            modified_time = datetime.datetime.fromtimestamp(file_info['modified_time'])
+            file_data.append({
+                '파일명': file_info['filename'],
+                '크기 (MB)': f"{file_info['size_mb']:.2f}",
+                '수정일': modified_time.strftime('%Y-%m-%d %H:%M:%S'),
+                '형식': os.path.splitext(file_info['filename'])[1].upper()
+            })
+        
+        df = pd.DataFrame(file_data)
+        st.dataframe(df, use_container_width=True)
+        
+        # 전체 통계
+        total_files = len(files)
+        total_size = sum(f['size_mb'] for f in files)
+        st.info(f"📊 **총 {total_files}개 파일, 전체 크기: {total_size:.2f} MB**")
+        
+    else:
+        st.warning("📁 폴더에 파일이 없습니다.")
+    
+    st.markdown("---")
+    
+    # 파일 업로드 섹션
+    st.subheader("📤 파일 업로드")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.write("**단일 파일 업로드**")
+        uploaded_file = st.file_uploader(
+            "파일을 선택하세요",
+            type=['txt', 'pdf'],
+            key="single_upload"
+        )
+        
+        if uploaded_file is not None:
+            if st.button("💾 단일 파일 저장", key="save_single"):
+                try:
+                    file_path = os.path.join(raw_data_path, uploaded_file.name)
+                    with open(file_path, "wb") as f:
+                        f.write(uploaded_file.getbuffer())
+                    st.success(f"✅ '{uploaded_file.name}' 파일이 저장되었습니다!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ 파일 저장 중 오류 발생: {str(e)}")
+    
+    with col2:
+        st.write("**다중 파일 업로드**")
+        uploaded_files = st.file_uploader(
+            "여러 파일을 선택하세요",
+            type=['txt', 'pdf'],
+            accept_multiple_files=True,
+            key="multiple_upload"
+        )
+        
+        if uploaded_files:
+            if st.button("💾 다중 파일 저장", key="save_multiple"):
+                try:
+                    saved_count = 0
+                    for uploaded_file in uploaded_files:
+                        file_path = os.path.join(raw_data_path, uploaded_file.name)
+                        with open(file_path, "wb") as f:
+                            f.write(uploaded_file.getbuffer())
+                        saved_count += 1
+                    
+                    st.success(f"✅ {saved_count}개 파일이 저장되었습니다!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ 파일 저장 중 오류 발생: {str(e)}")
+    
+    st.markdown("---")
+    
+    # 파일 삭제 섹션
+    st.subheader("🗑️ 파일 삭제")
+    
+    if files:
+        st.write("삭제할 파일을 선택하세요:")
+        
+        # 파일 선택 체크박스
+        selected_files = []
+        for file_info in files:
+            if st.checkbox(
+                f"{file_info['filename']} ({file_info['size_mb']:.2f} MB)",
+                key=f"delete_{file_info['filename']}"
+            ):
+                selected_files.append(file_info)
+        
+        if selected_files:
+            st.warning(f"⚠️ **{len(selected_files)}개 파일이 선택되었습니다.**")
+            
+            # 선택된 파일 목록 표시
+            st.write("**선택된 파일:**")
+            for file_info in selected_files:
+                st.write(f"- {file_info['filename']} ({file_info['size_mb']:.2f} MB)")
+            
+            # 삭제 확인 및 실행
+            if st.button("🗑️ 선택된 파일 삭제", type="secondary"):
+                try:
+                    deleted_count = 0
+                    for file_info in selected_files:
+                        os.remove(file_info['file_path'])
+                        deleted_count += 1
+                    
+                    st.success(f"✅ {deleted_count}개 파일이 삭제되었습니다!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ 파일 삭제 중 오류 발생: {str(e)}")
+        else:
+            st.info("📝 삭제할 파일을 선택해주세요.")
+    else:
+        st.info("📁 삭제할 파일이 없습니다.")
+    
+    st.markdown("---")
+    
+    # 사용법 안내
+    st.subheader("💡 사용법")
+    st.info("""
+    **지원 파일 형식:**
+    - 📄 텍스트 파일 (.txt)
+    - 📕 PDF 파일 (.pdf)
+    
+    **파일 크기 제한:**
+    - 단일 파일: 최대 200MB
+    - 전체 폴더: 최대 1GB
+    
+    **주의사항:**
+    - 파일 삭제는 되돌릴 수 없습니다
+    - 파일명에 특수문자 사용을 피해주세요
+    """)
+
+with tab2:
     st.header("Raw Data 동기화")
     
     # 동기화 관리자 가져오기
@@ -250,6 +430,31 @@ with tab1:
     with col2:
         sync_chunk_overlap = st.slider("청크 중첩", min_value=0, max_value=500, value=100, step=25, key="sync_chunk_overlap")
     
+    # Elasticsearch 연동 옵션
+    st.subheader("🔍 Elasticsearch 연동")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        enable_elasticsearch = st.checkbox(
+            "Elasticsearch 병렬 인덱싱 활성화", 
+            value=False,
+            help="ChromaDB와 함께 Elasticsearch에도 동시에 인덱싱합니다. 하이브리드 검색을 위해 필요합니다."
+        )
+    
+    with col2:
+        if enable_elasticsearch:
+            elasticsearch_manager = st.session_state.elasticsearch_manager
+            es_connection_ok = elasticsearch_manager.check_connection()
+            
+            if es_connection_ok:
+                st.success("✅ Elasticsearch 연결 확인")
+                doc_count = elasticsearch_manager.get_document_count()
+                st.info(f"현재 문서 수: {doc_count}")
+            else:
+                st.warning("⚠️ Elasticsearch 연결 실패")
+                st.info("Docker로 Elasticsearch를 실행해주세요")
+    
     # 동기화 실행
     if st.button("🚀 동기화 실행", type="primary"):
         # Update workflow status to in_progress
@@ -266,10 +471,19 @@ with tab1:
                 "document_count": db_manager.get_document_count()
             })
             
+            # Elasticsearch 매니저 준비
+            elasticsearch_mgr = None
+            if enable_elasticsearch:
+                elasticsearch_mgr = st.session_state.elasticsearch_manager
+                if not elasticsearch_mgr.check_connection():
+                    st.warning("Elasticsearch 연결이 실패했습니다. ChromaDB만 사용합니다.")
+                    elasticsearch_mgr = None
+            
             success = sync_manager.sync_with_db(
                 db_manager=db_manager,
                 chunk_size=sync_chunk_size,
-                chunk_overlap=sync_chunk_overlap
+                chunk_overlap=sync_chunk_overlap,
+                elasticsearch_manager=elasticsearch_mgr
             )
             
             if success:
@@ -331,7 +545,189 @@ with tab1:
                     else:
                         st.warning("저장된 파일을 찾을 수 없습니다.")
 
-with tab2:
+with tab3:
+    st.header("🔍 하이브리드 검색")
+    
+    # Initialize hybrid search manager
+    db_manager = st.session_state.db_manager
+    elasticsearch_manager = st.session_state.elasticsearch_manager
+    
+    if st.session_state.hybrid_search_manager is None and st.session_state.db is not None:
+        st.session_state.hybrid_search_manager = HybridSearchManager(
+            chroma_manager=db_manager,
+            elasticsearch_manager=elasticsearch_manager
+        )
+    
+    hybrid_search_manager = st.session_state.hybrid_search_manager
+    
+    if st.session_state.db is None:
+        st.warning("먼저 'Raw Data 동기화' 탭에서 문서를 동기화해 주세요.")
+    else:
+        # Search system status
+        st.subheader("🔍 검색 시스템 상태")
+        
+        if hybrid_search_manager:
+            search_status = hybrid_search_manager.get_search_status()
+            availability = search_status['availability']
+            
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.metric("Vector 검색", "✅ 사용 가능" if availability['vector_search'] else "❌ 사용 불가")
+                if availability['vector_search']:
+                    chroma_status = search_status['chromadb_status']
+                    st.info(f"문서 수: {chroma_status['document_count']}")
+            
+            with col2:
+                st.metric("BM25 검색", "✅ 사용 가능" if availability['bm25_search'] else "❌ 사용 불가")
+                if availability['bm25_search']:
+                    es_status = search_status['elasticsearch_status']
+                    st.info(f"문서 수: {es_status['document_count']}")
+                else:
+                    st.warning("Elasticsearch 연결 필요")
+            
+            with col3:
+                st.metric("하이브리드 검색", "✅ 사용 가능" if availability['hybrid_search'] else "❌ 사용 불가")
+                if availability['hybrid_search']:
+                    st.success("BM25 + Vector 융합 검색")
+                else:
+                    st.warning("ChromaDB와 Elasticsearch 모두 필요")
+        
+        st.markdown("---")
+        
+        # Search configuration
+        st.subheader("⚙️ 검색 설정")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            search_type = st.selectbox(
+                "검색 방법",
+                ["hybrid", "vector", "bm25"],
+                index=0,
+                help="hybrid: BM25+Vector 융합, vector: 의미 검색, bm25: 키워드 검색"
+            )
+        
+        with col2:
+            search_k = st.slider("검색 결과 수", min_value=1, max_value=20, value=5)
+        
+        with col3:
+            if search_type == "hybrid":
+                rrf_k = st.slider("RRF 상수", min_value=10, max_value=100, value=60, 
+                                help="Reciprocal Rank Fusion 상수 (낮을수록 상위 결과 강조)")
+        
+        # Search interface
+        st.subheader("🔍 검색 테스트")
+        
+        search_query = st.text_input("검색어를 입력하세요:", placeholder="예: 법인세율이 얼마인가요?")
+        
+        if st.button("🔍 검색 실행", type="primary") and search_query:
+            if hybrid_search_manager:
+                try:
+                    with st.spinner("검색 중..."):
+                        # Execute search
+                        if search_type == "hybrid":
+                            results, search_info = hybrid_search_manager.search(
+                                search_query, search_type, search_k, rrf_k
+                            )
+                        else:
+                            results, search_info = hybrid_search_manager.search(
+                                search_query, search_type, search_k
+                            )
+                        
+                        # Display search info
+                        st.subheader("📊 검색 결과 정보")
+                        info_col1, info_col2 = st.columns(2)
+                        
+                        with info_col1:
+                            st.metric("검색 방법", search_info.get('search_type', search_type))
+                            st.metric("총 결과 수", len(results))
+                        
+                        with info_col2:
+                            if 'search_methods_used' in search_info:
+                                methods = ", ".join(search_info['search_methods_used'])
+                                st.metric("사용된 방법", methods)
+                            if search_type == "hybrid" and 'rrf_k' in search_info:
+                                st.metric("RRF 상수", search_info['rrf_k'])
+                        
+                        # Display results
+                        if results:
+                            st.subheader("🎯 검색 결과")
+                            
+                            for i, result in enumerate(results):
+                                with st.expander(f"결과 {i+1}: {result['filename']} (점수: {result['score']:.3f})"):
+                                    # Result metadata
+                                    col1, col2 = st.columns(2)
+                                    with col1:
+                                        st.write(f"**파일명:** {result['filename']}")
+                                        st.write(f"**검색 유형:** {result['search_type']}")
+                                    with col2:
+                                        st.write(f"**점수:** {result['score']:.3f}")
+                                        if 'hybrid_rank' in result:
+                                            st.write(f"**하이브리드 순위:** {result['hybrid_rank']}")
+                                    
+                                    # Show ranking details for hybrid search
+                                    if search_type == "hybrid" and 'rrf_score' in result:
+                                        st.write("**상세 점수:**")
+                                        score_col1, score_col2, score_col3 = st.columns(3)
+                                        with score_col1:
+                                            if result.get('vector_rank'):
+                                                st.write(f"Vector 순위: {result['vector_rank']}")
+                                        with score_col2:
+                                            if result.get('bm25_rank'):
+                                                st.write(f"BM25 순위: {result['bm25_rank']}")
+                                        with score_col3:
+                                            st.write(f"RRF 점수: {result['rrf_score']:.4f}")
+                                    
+                                    # Content
+                                    st.write("**내용:**")
+                                    st.write(result['content'])
+                        else:
+                            st.warning("검색 결과가 없습니다.")
+                            
+                except Exception as e:
+                    st.error(f"검색 중 오류 발생: {str(e)}")
+            else:
+                st.error("하이브리드 검색 매니저가 초기화되지 않았습니다.")
+        
+        # Search comparison tool
+        if hybrid_search_manager and search_query:
+            st.markdown("---")
+            st.subheader("📊 검색 방법 비교")
+            
+            if st.button("🔍 모든 검색 방법 비교", type="secondary"):
+                try:
+                    with st.spinner("모든 검색 방법으로 검색 중..."):
+                        # Execute all search types
+                        vector_results, vector_info = hybrid_search_manager.search(search_query, "vector", search_k)
+                        bm25_results, bm25_info = hybrid_search_manager.search(search_query, "bm25", search_k)
+                        hybrid_results, hybrid_info = hybrid_search_manager.search(search_query, "hybrid", search_k, 60)
+                        
+                        # Display comparison
+                        st.write("**검색 결과 수 비교:**")
+                        comp_col1, comp_col2, comp_col3 = st.columns(3)
+                        
+                        with comp_col1:
+                            st.metric("Vector 검색", len(vector_results))
+                        with comp_col2:
+                            st.metric("BM25 검색", len(bm25_results))
+                        with comp_col3:
+                            st.metric("하이브리드 검색", len(hybrid_results))
+                        
+                        # Show top results from each method
+                        st.write("**각 검색 방법의 상위 3개 결과:**")
+                        
+                        for search_name, results in [("Vector", vector_results[:3]), ("BM25", bm25_results[:3]), ("Hybrid", hybrid_results[:3])]:
+                            st.write(f"**{search_name} 검색:**")
+                            for i, result in enumerate(results, 1):
+                                st.write(f"{i}. {result['filename']} (점수: {result['score']:.3f})")
+                                st.write(f"   {result['content'][:100]}...")
+                            st.write("")
+                        
+                except Exception as e:
+                    st.error(f"검색 비교 중 오류 발생: {str(e)}")
+
+with tab4:
     st.header("RAG 테스트")
     
     if st.session_state.db is None:
@@ -409,7 +805,7 @@ with tab2:
                 # Add error message to chat
                 chat_interface.add_message("assistant", f"죄송합니다. 답변 생성 중 오류가 발생했습니다: {str(e)}")
 
-with tab3:
+with tab4:
     st.header("질문 생성하기")
     
     if st.session_state.db is None:
@@ -517,7 +913,7 @@ with tab3:
             for i, question in enumerate(st.session_state.edited_questions):
                 st.write(f"{i+1}. {question}")
 
-with tab4:
+with tab5:
     st.header("RAG 평가하기")
     
     if st.session_state.db is None:

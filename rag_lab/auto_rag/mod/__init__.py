@@ -8,6 +8,8 @@ from .evaluation_manager import EvaluationManager
 from .chat_interface_manager import ChatInterfaceManager
 from .visualization_utils import VisualizationUtils
 from .workflow_status_manager import WorkflowStatusManager
+from .elasticsearch_manager import ElasticsearchManager
+from .hybrid_search_manager import HybridSearchManager
 
 __all__ = [
     'ChromaDBManager',
@@ -17,7 +19,9 @@ __all__ = [
     'EvaluationManager',
     'ChatInterfaceManager',
     'VisualizationUtils',
-    'WorkflowStatusManager'
+    'WorkflowStatusManager',
+    'ElasticsearchManager',
+    'HybridSearchManager'
 ]
 
 __version__ = "1.0.0"
